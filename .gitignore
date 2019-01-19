@@ -1,0 +1,4 @@
+.env
+dist
+package.yml
+endpoint.txt

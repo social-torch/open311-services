@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  People:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/people
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetEvent:
+          Type: Api
+          Properties:
+            Path: /people
+            Method: get
+  Person:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/person
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetEvent:
+          Type: Api
+          Properties:
+            Path: /person/{id}
+            Method: get
+Outputs:
+  URL:
+    Description: URL for HTTPS Endpoint
+    Value:
+      Fn::Join:
+        - ''
+        - - https://
+          - Ref: ServerlessRestApi
+          - ".execute-api."
+          - Ref: AWS::Region
+          - ".amazonaws.com/"
+          - Ref: ServerlessRestApiProdStage

@@ -1,29 +1,29 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
 Resources:
-  People:
+  Services:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: dist/handler/people
+      Handler: dist/handler/service
       Runtime: go1.x
       Tracing: Active
       Events:
         GetEvent:
           Type: Api
           Properties:
-            Path: /people
+            Path: /services
             Method: get
-  Person:
+  Requests:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: dist/handler/person
+      Handler: dist/handler/request
       Runtime: go1.x
       Tracing: Active
       Events:
         GetEvent:
           Type: Api
           Properties:
-            Path: /person/{id}
+            Path: /requests
             Method: get
 Outputs:
   URL:

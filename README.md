@@ -1,12 +1,12 @@
-# Open311 Services 
+# Open311 Services
 
 ```bash
-$ > mkdir -p $GOPATH/src/github.com/social-torch/open311-services
-$ > cd  $GOPATH/src/github.com/social-torch/open311-services
+$ > mkdir -p $GOPATH/src/github.com/social-torch
+$ > cd  $GOPATH/src/github.com/social-torch
 $ > git clone git@github.com:social-torch/open311-services
 ```
 
-## Dependecies
+## Dependencies
 ```bash
 $ > go get github.com/aws/aws-lambda-go/events
 $ > go get github.com/aws/aws-lambda-go/lambda

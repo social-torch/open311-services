@@ -65,11 +65,11 @@ $ > make outputs
   }
 ]
 
-$ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/people
+$ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/services
 
-{"data":[{"id":"d1","name":"Anton","age":31},{"id":"c2","name":"Frank","age":28},{"id":"b1","name":"Horst","age":42}]}
+TODO:  Show all calls
 
-$ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/person/b1
+$ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/requests
 
-{"data":{"id":"b1","name":"Horst","age":42}}
+TODO:  Show all calls
 ```

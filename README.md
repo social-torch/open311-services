@@ -11,6 +11,7 @@ $ > git clone git@github.com:social-torch/open311-services
 $ > go get github.com/aws/aws-lambda-go/events
 $ > go get github.com/aws/aws-lambda-go/lambda
 $ > go get github.com/stretchr/testify/assert
+$ > sudo yum install jq
 ```
 
 ## Build

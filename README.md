@@ -13,7 +13,7 @@ $ > go get github.com/aws/aws-lambda-go/lambda
 $ > go get github.com/stretchr/testify/assert
 $ > sudo yum install jq
 ```
-Also depends on AWS CLI and AWS SAM CLI
+Also depends on docker, the AWS CLI and AWS SAM CLI
 
 ## Build
 ```bash

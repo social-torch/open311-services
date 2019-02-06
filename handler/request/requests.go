@@ -16,10 +16,21 @@ var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	switch req.HTTPMethod {
 	case "GET":
-		return getRequests()
-	default:
-		return clientError(http.StatusMethodNotAllowed)
+		//if req.Resource == "/request" {
+		//		id := req.PathParameters["id"]
+		//		return getRequest(id)
+		//}
+
+		if req.Resource == "/requests" {
+			return getRequests()
+		}
+
+	//case "POST":
+		// body := req.body
+		// Parse body
+		// return submitRequest()
 	}
+	return clientError(http.StatusMethodNotAllowed)
 }
 
 func getRequests() (events.APIGatewayProxyResponse, error) {

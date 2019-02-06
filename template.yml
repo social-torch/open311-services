@@ -8,10 +8,15 @@ Resources:
       Runtime: go1.x
       Tracing: Active
       Events:
-        GetEvent:
+        GetServices:
           Type: Api
           Properties:
             Path: /services
+            Method: get
+        GetService:
+          Type: Api
+          Properties:
+            Path: /service/{id}
             Method: get
   Requests:
     Type: AWS::Serverless::Function
@@ -20,11 +25,22 @@ Resources:
       Runtime: go1.x
       Tracing: Active
       Events:
-        GetEvent:
+        GetRequests:
           Type: Api
           Properties:
             Path: /requests
             Method: get
+        GetRequest:
+          Type: Api
+          Properties:
+            Path: /request/{id}
+            Method: get
+        PostRequest:
+          Type: Api
+          Properties:
+            Path: /request
+            Method: post
+
 Outputs:
   URL:
     Description: URL for HTTPS Endpoint

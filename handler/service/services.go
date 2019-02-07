@@ -16,16 +16,25 @@ var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	switch req.HTTPMethod {
 	case "GET":
-			//if req.Resource == "/service" {
-			//		id := req.PathParameters["id"]
-			//		return getService(id)
-			//}
+		if req.Resource == "/service/{id}" {
+			id := req.PathParameters["id"]
+			return getService(id)
+		}
 
-			if req.Resource == "/services" {
-				return getServices()
-			}
+		if req.Resource == "/services" {
+			return getServices()
+		}
 	}
 	return clientError(http.StatusMethodNotAllowed)
+}
+
+func getService(id string) (events.APIGatewayProxyResponse, error) {
+	service, _ := repository.GetService(id)
+	body, err := json.Marshal(service)
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+	}
+	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
 }
 
 func getServices() (events.APIGatewayProxyResponse, error) {

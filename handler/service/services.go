@@ -29,7 +29,7 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 }
 
 func getService(id string) (events.APIGatewayProxyResponse, error) {
-	service, _ := repository.GetService(id)
+	service, _ := repository.GetService(id) //TODO use value mechanics instead of pointer mechanics
 	body, err := json.Marshal(service)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
@@ -38,7 +38,7 @@ func getService(id string) (events.APIGatewayProxyResponse, error) {
 }
 
 func getServices() (events.APIGatewayProxyResponse, error) {
-	services, _ := repository.GetServices()
+	services, _ := repository.GetServices() //TODO use value mechanics instead of pointer mechanics
 	body, err := json.Marshal(services)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil

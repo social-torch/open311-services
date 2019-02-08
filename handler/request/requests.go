@@ -54,8 +54,6 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	errorLogger.Println("Entered submitRequest")
-
 	if req.Headers["Content-Type"] != "application/json" {
 		return clientError(http.StatusNotAcceptable)
 	}
@@ -77,18 +75,12 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		return clientError(http.StatusBadRequest)
 	}
 
-	errorLogger.Println("About to call SubmitRequest")
-
 	response, err := repository.SubmitRequest(Open311request)
-
-	errorLogger.Println("Made it out of SubmitRequest")
-	errorLogger.Println(err)
 
 	if err != nil {
 		return serverError(err)
 	}
-	errorLogger.Println("Returned from SubmitRequest")
-
+	
 	body, err := json.Marshal(response)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil

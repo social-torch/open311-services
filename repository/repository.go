@@ -49,8 +49,7 @@ type AttributeValue struct {
 	name string `json:name`
 }
 
-// Issues that have been reported as service requests.  Location
-// is submitted via lat/long or address
+// Issues that have been reported as service requests.  Location is submitted via lat/long or address
 type Request struct {
 	ServiceRequestId  string  `json:"service_request_id"` // The unique ID of the service request created.
 	Status            string  `json:"status"`             // The current status of the service request.
@@ -69,7 +68,7 @@ type Request struct {
 	Latitude          float32 `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32 `json:"lon"`                // longitude using the (WGS84) projection.
 	MediaUrl          string  `json:"media_url"`          // A URL to media associated with the request, eg an image.
-	//Values              []AttributeValue `json:values`  //TODO enable this to grow with the things aussie wants
+	//Values              []AttributeValue `json:values`  //TODO enable this to grow with the things Aussie wants
 }
 
 type RequestResponse struct {
@@ -100,8 +99,7 @@ func allServices() ([]Service, error) {
 	result, err := svc.Scan(params)
 
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil, err
+		return nil, fmt.Errorf("repository: unable to get all services from database. \n %s", err)
 	}
 
 	services := []Service{}
@@ -159,7 +157,7 @@ func GetService(code string) (*Service, error) {
 	return &service, err
 }
 
-func IsValidServiceCode(service_code string) (bool) {
+func IsValidServiceCode(service_code string) bool {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String("us-east-1")}, //TODO don't hard code region
 	)

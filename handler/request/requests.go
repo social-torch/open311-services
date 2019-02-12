@@ -80,14 +80,14 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	if err != nil {
 		return serverError(err)
 	}
-	
+
 	body, err := json.Marshal(response)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
 	}
 
 	return events.APIGatewayProxyResponse{
-		StatusCode: 201,
+		StatusCode: 201, // TODO fulfill REST standards of 201 response
 		Headers:    map[string]string{"content-type": "application/json"},
 		Body:       string(body),
 	}, nil

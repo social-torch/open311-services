@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/social-torch/open311-services/repository"
@@ -29,16 +30,25 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 }
 
 func getService(id string) (events.APIGatewayProxyResponse, error) {
-	service, _ := repository.GetService(id) //TODO use value mechanics instead of pointer mechanics
+	service, err := repository.GetService(id) //TODO use value mechanics instead of pointer mechanics
+	if service == nil {
+		return events.APIGatewayProxyResponse{Body: "Service not found", StatusCode: 404}, nil
+	}
+	if err != nil {return serverError(err)}
+
 	body, err := json.Marshal(service)
 	if err != nil {
-		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		return serverError(fmt.Errorf("service handler: unable to marshal service: \n %+v \n %s", *service, err))
 	}
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
 }
 
 func getServices() (events.APIGatewayProxyResponse, error) {
-	services, _ := repository.GetServices() //TODO use value mechanics instead of pointer mechanics
+	services, err := repository.GetServices() //TODO use value mechanics instead of pointer mechanics
+	if err != nil {
+		return serverError(err)
+	}
+
 	body, err := json.Marshal(services)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
@@ -48,7 +58,7 @@ func getServices() (events.APIGatewayProxyResponse, error) {
 
 func serverError(err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())
-
+	//TODO  Need to provide more context to the user based on error
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusInternalServerError,
 		Body:       http.StatusText(http.StatusInternalServerError),

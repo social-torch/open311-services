@@ -86,20 +86,22 @@ func allServices() ([]Service, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String("us-east-1")}, //TODO don't hard code region
 	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: unable to establish session with AWS \n %s", err)
+	}
 
 	// Create DynamoDB client
 	svc := dynamodb.New(sess)
 
 	// Build the query input parameters
 	params := &dynamodb.ScanInput{
-		TableName: aws.String("Services"), //TODO don't hard code Tablename
+		TableName: aws.String("Services"), //TODO don't hard code Table name
 	}
 
 	// Make the DynamoDB Query API call
 	result, err := svc.Scan(params)
-
 	if err != nil {
-		return nil, fmt.Errorf("repository: unable to get all services from database. \n %s", err)
+		return nil, fmt.Errorf("repository: unable to get all services from database with the following parameters: %+v. \n %s", params, err)
 	}
 
 	services := []Service{}
@@ -108,9 +110,8 @@ func allServices() ([]Service, error) {
 	for _, i := range result.Items {
 		service := Service{}
 		err = dynamodbattribute.UnmarshalMap(i, &service)
-
 		if err != nil {
-			panic(fmt.Sprintf("Failed to unmarshal Record, %v", err))
+			return services, fmt.Errorf("repository: Failed to unmarshal Record: %+v. \n %s", i, err)
 		}
 
 		services = append(services, service)
@@ -123,30 +124,31 @@ func GetService(code string) (*Service, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String("us-east-1")}, //TODO don't hard code region
 	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: unable to establish session with AWS \n %s", err)
+	}
 
 	// Create DynamoDB client
 	svc := dynamodb.New(sess)
 
-	result, err := svc.GetItem(&dynamodb.GetItemInput{
+	input := &dynamodb.GetItemInput{
 		TableName: aws.String("Services"), //TODO don't hard code table name ?
 		Key: map[string]*dynamodb.AttributeValue{
 			"service_code": {
 				S: aws.String(code),
 			},
 		},
-	})
-
+	}
+	result, err := svc.GetItem(input)
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil, err
+		return nil, fmt.Errorf("repository: unable to get specified service from database with the following input: %+v. \n %s", input, err)
 	}
 
 	service := Service{}
 
 	err = dynamodbattribute.UnmarshalMap(result.Item, &service)
-
 	if err != nil {
-		panic(fmt.Sprintf("Failed to unmarshal Record, %v", err))
+		return &service, fmt.Errorf("repository: Failed to unmarshal service record from database: %+v. \n %s", result.Item, err)
 	}
 
 	if service.ServiceCode == "" {

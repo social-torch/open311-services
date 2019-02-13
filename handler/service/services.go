@@ -30,21 +30,30 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 }
 
 func getService(id string) (events.APIGatewayProxyResponse, error) {
-	service, err := repository.GetService(id) //TODO use value mechanics instead of pointer mechanics
-	if service == nil {
-		return events.APIGatewayProxyResponse{Body: "Service not found", StatusCode: 404}, nil
-	}
-	if err != nil {return serverError(err)}
-
-	body, err := json.Marshal(service)
+	service, err := repository.GetService(id)
 	if err != nil {
-		return serverError(fmt.Errorf("service handler: unable to marshal service: \n %+v \n %s", *service, err))
+		switch err.(type) {
+		case *repository.ServiceCodeNotFoundErr:
+			errorMessage := fmt.Sprintf("service handler error: \n %s \n  service_code: %s not in repository", err, id)
+			errorLogger.Println(errorMessage)
+			return events.APIGatewayProxyResponse{Body: errorMessage, StatusCode: 404}, nil
+		default:
+			return serverError(err)
+		}
 	}
+
+	body, err := json.Marshal(&service)
+	if err != nil {
+		return serverError(fmt.Errorf("service handler: unable to marshal service: \n %+v \n %s", service, err))
+		//TODO should probably throw server error here
+
+	}
+
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
 }
 
 func getServices() (events.APIGatewayProxyResponse, error) {
-	services, err := repository.GetServices() //TODO use value mechanics instead of pointer mechanics
+	services, err := repository.GetServices()
 	if err != nil {
 		return serverError(err)
 	}

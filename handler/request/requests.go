@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/social-torch/open311-services/repository"
@@ -35,16 +36,33 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 }
 
 func getRequest(id string) (events.APIGatewayProxyResponse, error) {
-	request, _ := (repository.GetRequest(id)) //TODO use value mechanics instead of pointer mechanics
-	body, err := json.Marshal(request)
+	request, err := repository.GetRequest(id)
+	if err != nil {
+		switch err.(type) {
+		case *repository.RequestIdNotFoundErr:
+			errorMessage := fmt.Sprintf("request handler error: \n %s \n  service_request_id: %s not in database", err, id)
+			errorLogger.Println(errorMessage)
+			return events.APIGatewayProxyResponse{Body: errorMessage, StatusCode: 404}, nil
+		default:
+			return serverError(err)
+		}
+	}
+
+	body, err := json.Marshal(&request)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		//TODO should probably throw server error here
 	}
+
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
 }
 
 func getRequests() (events.APIGatewayProxyResponse, error) {
-	requests, _ := repository.GetRequests() //TODO use value mechanics instead of pointer mechanics
+	requests, err := repository.GetRequests()
+	if err != nil {
+		return serverError(err)
+	}
+
 	body, err := json.Marshal(requests)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
@@ -65,18 +83,20 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	}
 
 	// Make sure Request has minimum amount of information in order to create new 311 request
-	//Check that service code exists in Services table
+	// TODO - ask Joel, should these checks be done in repository?
+	// Check that service code exists in Services table
 	if !repository.IsValidServiceCode(Open311request.ServiceCode) {
+		errorLogger.Printf("\n requests: Invalid Service Code: %s", Open311request.ServiceCode)
 		return clientError(http.StatusBadRequest)
 	}
 
 	//Check that request has a location
 	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
+		errorLogger.Printf("\n requests: no location included in request")
 		return clientError(http.StatusBadRequest)
 	}
 
 	response, err := repository.SubmitRequest(Open311request)
-
 	if err != nil {
 		return serverError(err)
 	}

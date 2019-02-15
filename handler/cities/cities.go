@@ -17,24 +17,24 @@ var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	switch req.HTTPMethod {
 	case "GET":
-		if req.Resource == "/service/{id}" {
+		if req.Resource == "/city/{id}" {
 			id := req.PathParameters["id"]
-			return getService(id)
+			return getCity(id)
 		}
 
-		if req.Resource == "/services" {
-			return getServices()
+		if req.Resource == "/cities" {
+			return getCities()
 		}
 	}
 	return clientError(http.StatusMethodNotAllowed)
 }
 
-func getService(id string) (events.APIGatewayProxyResponse, error) {
-	service, err := repository.GetService(id)
+func getCity(id string) (events.APIGatewayProxyResponse, error) {
+	city, err := repository.GetCity(id)
 	if err != nil {
 		switch err.(type) {
-		case *repository.ServiceCodeNotFoundErr:
-			errorMessage := fmt.Sprintf("service handler error: \n %s \n  service_code: %s not in repository", err, id)
+		case *repository.CityNotFoundErr:
+			errorMessage := fmt.Sprintf("city handler error: \n %s \n  city_name: %s not in repository", err, id)
 			errorLogger.Println(errorMessage)
 			return events.APIGatewayProxyResponse{Body: errorMessage, StatusCode: 404}, nil
 		default:
@@ -42,22 +42,22 @@ func getService(id string) (events.APIGatewayProxyResponse, error) {
 		}
 	}
 
-	body, err := json.Marshal(&service)
+	body, err := json.Marshal(&city)
 	if err != nil {
 		//TODO throw server error here instead
-		return serverError(fmt.Errorf("service handler: unable to marshal service: \n %+v \n %s", service, err))
+		return serverError(fmt.Errorf("city handler: unable to marshal service: \n %+v \n %s", city, err))
 	}
 
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
 }
 
-func getServices() (events.APIGatewayProxyResponse, error) {
-	services, err := repository.GetServices()
+func getCities() (events.APIGatewayProxyResponse, error) {
+	cities, err := repository.GetCities()
 	if err != nil {
 		return serverError(err)
 	}
 
-	body, err := json.Marshal(services)
+	body, err := json.Marshal(cities)
 	if err != nil {
 		//TODO throw server error here instead
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil

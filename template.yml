@@ -40,6 +40,23 @@ Resources:
           Properties:
             Path: /request
             Method: post
+  Cities:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/cities
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetRequests:
+          Type: Api
+          Properties:
+            Path: /cities
+            Method: get
+        GetRequest:
+          Type: Api
+          Properties:
+            Path: /city/{id}
+            Method: get
 
 Outputs:
   URL:

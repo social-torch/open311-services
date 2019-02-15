@@ -16,7 +16,12 @@ import (
 const (
 	ServicesTable = "Services"
 	RequestsTable = "Requests"
+	CitiesTable   = "Cities"
 	AwsRegion     = endpoints.UsEast1RegionID // "us-east-1" // US East (N. Virginia).
+)
+const (
+	RequestOpen   = "open"   // Open311 Request Status - it has been reported
+	RequestClosed = "closed" // Open311 Request Status - it has been resolved
 )
 
 // Single service (type) offered via Open311
@@ -57,30 +62,36 @@ type AttributeValue struct {
 
 // Issues that have been reported as service requests.  Location is submitted via lat/long or address
 type Request struct {
-	ServiceRequestId  string  `json:"service_request_id"` // The unique ID of the service request created.
-	Status            string  `json:"status"`             // The current status of the service request.
-	StatusNotes       string  `json:"status_notes"`       // Explanation of why status was changed to current state or more details on current status than conveyed with status alone.
-	ServiceName       string  `json:"service_name"`       // The human readable name of the service request type
-	ServiceCode       string  `json:"service_code"`       // The unique identifier for the service request type
-	Description       string  `json:"description"`        // A full description of the request or report submitted.
-	AgencyResponsible string  `json:"agency_responsible"` // The agency responsible for fulfilling or otherwise addressing the service request.
-	ServiceNotice     string  `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported.
-	RequestedDateTime string  `json:"requested_datetime"` // The date and time when the service request was made.
-	UpdatedDateTime   string  `json:"update_datetime"`    // The date and time when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
-	ExpectedDateTime  string  `json:"expected_datetime"`  // The date and time when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
-	Address           string  `json:"address"`            // Human readable address or description of location.
-	AddressId         string  `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
-	ZipCode           int32   `json:"zipcode"`            // The postal code for the location of the service request.
-	Latitude          float32 `json:"lat"`                // latitude using the (WGS84) projection.
-	Longitude         float32 `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaUrl          string  `json:"media_url"`          // A URL to media associated with the request, eg an image.
-	//Values              []AttributeValue `json:"values"`  //TODO enable this to grow with the things Aussie wants
+	ServiceRequestId  string           `json:"service_request_id"` // The unique ID of the service request created.
+	Status            string           `json:"status"`             // The current status of the service request.
+	StatusNotes       string           `json:"status_notes"`       // Explanation of why status was changed to current state or more details on current status than conveyed with status alone.
+	ServiceName       string           `json:"service_name"`       // The human readable name of the service request type
+	ServiceCode       string           `json:"service_code"`       // The unique identifier for the service request type
+	Description       string           `json:"description"`        // A full description of the request or report submitted.
+	AgencyResponsible string           `json:"agency_responsible"` // The agency responsible for fulfilling or otherwise addressing the service request.
+	ServiceNotice     string           `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported.
+	RequestedDateTime string           `json:"requested_datetime"` // The date and time when the service request was made.
+	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
+	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
+	Address           string           `json:"address"`            // Human readable address or description of location.
+	AddressId         string           `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
+	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
+	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
+	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
+	MediaUrl          string           `json:"media_url"`          // A URL to media associated with the request, eg an image.
+	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
 
 type RequestResponse struct {
 	ServiceRequestID string `json:"service_request_id"` // The unique ID of the service request created.
 	ServiceNotice    string `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported
 	AccountID        string `json:"account_id"`         // Unique ID for the user account of the person submitting the request
+}
+
+// Assumes each jurisdiction has its own AWS endpoint
+type City struct {
+	CityName string `json:"city_name"`
+	Endpoint string `json:"endpoint"`
 }
 
 type ServiceCodeNotFoundErr struct {
@@ -96,6 +107,14 @@ type RequestIdNotFoundErr struct {
 }
 
 func (e *RequestIdNotFoundErr) Error() string {
+	return e.message
+}
+
+type CityNotFoundErr struct {
+	message string
+}
+
+func (e *CityNotFoundErr) Error() string {
 	return e.message
 }
 
@@ -263,7 +282,7 @@ func SubmitRequest(request Request) (RequestResponse, error) {
 	request.RequestedDateTime = t.Format(time.RFC3339)
 
 	//Initialize new request as "open"
-	request.Status = "open"
+	request.Status = RequestOpen
 
 	// Initialize service name
 	service, _ := GetService(request.ServiceCode)
@@ -332,7 +351,8 @@ func IsValidServiceCode(ServiceCode string) bool {
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		FilterExpression:          expr.Filter(),
-		TableName:                 aws.String(ServicesTable),
+		// TODO Add projection to just give the count back, then just check against that integer.
+		TableName: aws.String(ServicesTable),
 	}
 
 	// Make the DynamoDB Query API call
@@ -342,6 +362,7 @@ func IsValidServiceCode(ServiceCode string) bool {
 			"Query API call failed while checking if Service Code was valid. \n   %s", err)
 	}
 
+	//TODO compare against smaller projection
 	if *result.Count == 1 { //Since "Contains" matches substrings and services codes should be unique, valid IDs match only once
 		return true
 	}
@@ -369,4 +390,74 @@ func genRequestID() (string, error) {
 	}
 	idString := strconv.FormatUint(id, 16) // sonyflake uses Hex
 	return idString, err
+}
+
+func GetCities() ([]City, error) {
+	return allCities()
+}
+
+func allCities() ([]City, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return []City{}, err
+	}
+
+	// Build the query input parameters
+	params := &dynamodb.ScanInput{
+		TableName: aws.String(CitiesTable),
+	}
+
+	// Make the DynamoDB Query API call
+	result, err := svc.Scan(params)
+	if err != nil {
+		return nil, fmt.Errorf("\n repository: unable to get all cities from database with the following parameters: %+v. \n  %s", params, err)
+	}
+
+	cities := []City{}
+
+	// For each city, unmarshal and add to array of cities
+	for _, i := range result.Items {
+		city := City{}
+		err = dynamodbattribute.UnmarshalMap(i, &city)
+		if err != nil {
+			return cities, fmt.Errorf("\n repository: Failed to unmarshal record: \n %+v \n   %s", i, err)
+		}
+
+		cities = append(cities, city)
+	}
+	return cities, err
+}
+
+func GetCity(id string) (City, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return City{}, err
+	}
+
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String(CitiesTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"city_name": {
+				S: aws.String(id),
+			},
+		},
+	}
+
+	result, err := svc.GetItem(input)
+	if err != nil {
+		return City{}, fmt.Errorf("\n repository: unable to get specified city from database with the following input: \n  %+v. \n   %s", input, err)
+	}
+
+	city := City{}
+
+	err = dynamodbattribute.UnmarshalMap(result.Item, &city)
+	if err != nil {
+		return city, fmt.Errorf("\n repository: Failed to unmarshal city record from database: \n  %+v. \n   %s", result.Item, err)
+	}
+
+	if city.CityName == "" {
+		return city, &CityNotFoundErr{"city not found"}
+	}
+
+	return city, err
 }

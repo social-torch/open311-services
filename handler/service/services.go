@@ -44,9 +44,8 @@ func getService(id string) (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(&service)
 	if err != nil {
+		//TODO throw server error here instead
 		return serverError(fmt.Errorf("service handler: unable to marshal service: \n %+v \n %s", service, err))
-		//TODO should probably throw server error here
-
 	}
 
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
@@ -60,6 +59,7 @@ func getServices() (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(services)
 	if err != nil {
+		//TODO throw server error here instead
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
 	}
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
@@ -68,6 +68,7 @@ func getServices() (events.APIGatewayProxyResponse, error) {
 func serverError(err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())
 	//TODO  Need to provide more context to the user based on error
+	// See https://wiki.open311.org/GeoReport_v2/#errors
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusInternalServerError,
 		Body:       http.StatusText(http.StatusInternalServerError),
@@ -75,6 +76,8 @@ func serverError(err error) (events.APIGatewayProxyResponse, error) {
 }
 
 func clientError(status int) (events.APIGatewayProxyResponse, error) {
+	//TODO provide more context
+	// See https://wiki.open311.org/GeoReport_v2/#errors
 	return events.APIGatewayProxyResponse{
 		StatusCode: status,
 		Body:       http.StatusText(status),

@@ -50,8 +50,8 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(&request)
 	if err != nil {
+		//TODO throw server error here instead
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
-		//TODO should probably throw server error here
 	}
 
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
@@ -65,6 +65,7 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(requests)
 	if err != nil {
+		//TODO throw server error here instead
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
 	}
 	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
@@ -83,7 +84,6 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	}
 
 	// Make sure Request has minimum amount of information in order to create new 311 request
-	// TODO - ask Joel, should these checks be done in repository?
 	// Check that service code exists in Services table
 	if !repository.IsValidServiceCode(Open311request.ServiceCode) {
 		errorLogger.Printf("\n requests: Invalid Service Code: %s", Open311request.ServiceCode)
@@ -103,6 +103,7 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 	body, err := json.Marshal(response)
 	if err != nil {
+		//TODO throw server error here instead
 		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
 	}
 
@@ -116,8 +117,9 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 func serverError(err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())
 
+	// TODO provide caller more context  (error code, etc)
 	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusInternalServerError,
+		StatusCode: http.StatusInternalServerError, //TODO figure out way to generate right HTML code
 		Body:       http.StatusText(http.StatusInternalServerError),
 	}, nil
 }

@@ -16,7 +16,7 @@ install:
 	go get github.com/aws/aws-sdk-go
 	go get github.com/aws/aws-lambda-go/events
 	go get github.com/aws/aws-lambda-go/lambda
-	go get github.com/sony/sonyflake
+	go get github.com/oklog/ulid
 	go get github.com/stretchr/testify/assert
 
 test:

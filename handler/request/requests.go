@@ -73,10 +73,6 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	if req.Headers["Content-Type"] != "application/json" {
-		return clientError(http.StatusNotAcceptable)
-	}
-
 	var Open311request repository.Request
 	err := json.Unmarshal([]byte(req.Body), &Open311request)
 	if err != nil {

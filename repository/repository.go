@@ -8,9 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
-	"github.com/sony/sonyflake"
-	"strconv"
+	"github.com/oklog/ulid"
+	"math/rand"
 	"time"
+
 )
 
 const (
@@ -371,25 +372,11 @@ func IsValidServiceCode(ServiceCode string) bool {
 }
 
 func genRequestID() (string, error) {
-	// TODO Replace with something a little more readable. Make assumptions on performance required.
-	// Perhaps return something based on calendar day of request and an incrementing number (atomically stored in DB??
-
-	// Initialize sonyfake - see usage details at https://github.com/sony/sonyflake
-	var st sonyflake.Settings
-	//st.MachineID = awsutil.AmazonEC2MachineID //uncomment if running in EC2  // look here for timeout errors
-	flake := sonyflake.NewSonyflake(st)
-
-	if flake == nil {
-		return "", fmt.Errorf("repository/sonyflake: error creating Unique ID generator. \n  sonyflake settings %+v", st)
-	}
-
-	// Generate relatively short unique ID
-	id, err := flake.NextID()
-	if err != nil {
-		return "", fmt.Errorf("repository/sonyflake: error generating Unique ID. \n  sonyflake: %+v \n  %s", flake, err)
-	}
-	idString := strconv.FormatUint(id, 16) // sonyflake uses Hex
-	return idString, err
+	 t := time.Now().UTC()
+	 entropy := rand.New(rand.NewSource(t.UnixNano()))
+	 id := ulid.MustNew(ulid.Timestamp(t), entropy)
+	 reqID := "SR-" + id.String()
+	 return reqID, nil;
 }
 
 func GetCities() ([]City, error) {

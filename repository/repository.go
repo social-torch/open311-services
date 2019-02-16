@@ -374,7 +374,10 @@ func IsValidServiceCode(ServiceCode string) bool {
 func genRequestID() (string, error) {
 	 t := time.Now().UTC()
 	 entropy := rand.New(rand.NewSource(t.UnixNano()))
-	 id := ulid.MustNew(ulid.Timestamp(t), entropy)
+	 id,err := ulid.New(ulid.Timestamp(t), entropy)
+	 if err != nil {
+		 return "", fmt.Errorf("\n repository: Unable to generate request id:\n  %s", err)
+	 }
 	 reqID := "SR-" + id.String()
 	 return reqID, nil;
 }

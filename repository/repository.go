@@ -2,16 +2,15 @@ package repository
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/oklog/ulid"
-	"math/rand"
-	"time"
-
 )
 
 const (
@@ -336,50 +335,40 @@ func IsValidServiceCode(ServiceCode string) bool {
 	svc, err := createDynamoClient()
 	if err != nil {
 		fmt.Printf("\nERROR: repository/IsValidServiceCode: unable to establish session with AWS \n  %s", err)
-		return false //TODO better handle errors
-
+		return false
 	}
 
-	filt := expression.Contains(expression.Name("service_code"), ServiceCode)
-	expr, err := expression.NewBuilder().WithFilter(filt).Build()
-	if err != nil {
-		fmt.Printf("\nERROR: repository: "+
-			"While checking if service existed, Got error building database expression. \n   %s", err)
-	}
-
-	// Build the query input parameters
-	params := &dynamodb.ScanInput{
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		FilterExpression:          expr.Filter(),
-		// TODO Add projection to just give the count back, then just check against that integer.
+	input := &dynamodb.GetItemInput{
 		TableName: aws.String(ServicesTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"service_code": {
+				S: aws.String(ServiceCode),
+			},
+		},
 	}
-
-	// Make the DynamoDB Query API call
-	result, err := svc.Scan(params)
+	response, err := svc.GetItem(input)
 	if err != nil {
 		fmt.Printf("\nERROR: repository: "+
 			"Query API call failed while checking if Service Code was valid. \n   %s", err)
 	}
 
-	//TODO compare against smaller projection
-	if *result.Count == 1 { //Since "Contains" matches substrings and services codes should be unique, valid IDs match only once
-		return true
+	// If there is no matching item, GetItem does not return any data and there will be no Item element in the response.
+	if response.Item == nil {
+		return false
 	}
 
-	return false
+	return true
 }
 
 func genRequestID() (string, error) {
-	 t := time.Now().UTC()
-	 entropy := rand.New(rand.NewSource(t.UnixNano()))
-	 id,err := ulid.New(ulid.Timestamp(t), entropy)
-	 if err != nil {
-		 return "", fmt.Errorf("\n repository: Unable to generate request id:\n  %s", err)
-	 }
-	 reqID := "SR-" + id.String()
-	 return reqID, nil;
+	t := time.Now().UTC()
+	entropy := rand.New(rand.NewSource(t.UnixNano()))
+	id, err := ulid.New(ulid.Timestamp(t), entropy)
+	if err != nil {
+		return "", fmt.Errorf("\n repository: Unable to generate request id:\n  %s", err)
+	}
+	reqID := "SR-" + id.String()
+	return reqID, nil
 }
 
 func GetCities() ([]City, error) {

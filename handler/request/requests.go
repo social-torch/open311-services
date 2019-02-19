@@ -2,16 +2,19 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/social-torch/open311-services/repository"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/social-torch/open311-services/repository"
 )
 
 var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
+var warningLogger = log.New(os.Stderr, "WARNING ", log.Llongfile)
 
 /// Route requests
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -27,12 +30,9 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 		}
 
 	case "POST":
-		//body := req.body
-		//Parse
-		//body
 		return submitRequest(req)
 	}
-	return clientError(http.StatusMethodNotAllowed)
+	return clientError(http.StatusMethodNotAllowed, errors.New("\n method must be 'GET' or 'POST'"))
 }
 
 func getRequest(id string) (events.APIGatewayProxyResponse, error) {
@@ -40,35 +40,40 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 	if err != nil {
 		switch err.(type) {
 		case *repository.RequestIdNotFoundErr:
-			errorMessage := fmt.Sprintf("request handler error: \n %s \n  service_request_id: %s not in database", err, id)
-			errorLogger.Println(errorMessage)
-			return events.APIGatewayProxyResponse{Body: errorMessage, StatusCode: 404}, nil
+			errorMessage := fmt.Errorf("\n request handler error: \n %s \n  service_request_id: %s not in database", err, id)
+			return clientError(http.StatusNotFound, errorMessage)
 		default:
-			return serverError(err)
+			return serverError(http.StatusInternalServerError, err)
 		}
 	}
 
 	body, err := json.Marshal(&request)
 	if err != nil {
-		//TODO throw server error here instead
-		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		return serverError(http.StatusInternalServerError, errors.New("\n error marshalling GetRequest() struct"))
 	}
 
-	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
+	}, nil
 }
 
 func getRequests() (events.APIGatewayProxyResponse, error) {
 	requests, err := repository.GetRequests()
 	if err != nil {
-		return serverError(err)
+		return serverError(http.StatusInternalServerError, err)
 	}
 
 	body, err := json.Marshal(requests)
 	if err != nil {
-		//TODO throw server error here instead
-		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		return serverError(http.StatusInternalServerError, errors.New("\n error marshalling GetRequests() struct"))
 	}
-	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
+	}, nil
 }
 
 func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -76,54 +81,52 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	var Open311request repository.Request
 	err := json.Unmarshal([]byte(req.Body), &Open311request)
 	if err != nil {
-		return clientError(http.StatusUnprocessableEntity)
+		return clientError(http.StatusUnprocessableEntity, errors.New("\n error unmarshalling Request JSON. Check syntax"))
 	}
 
 	// Make sure Request has minimum amount of information in order to create new 311 request
 	// Check that service code exists in Services table
 	if !repository.IsValidServiceCode(Open311request.ServiceCode) {
-		errorLogger.Printf("\n requests: Invalid Service Code: %s", Open311request.ServiceCode)
-		return clientError(http.StatusBadRequest)
+		return clientError(http.StatusBadRequest, errors.New("\n invalid Service Code: "+Open311request.ServiceCode))
 	}
 
-	//Check that request has a location
+	// Check that request has a location
 	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
-		errorLogger.Printf("\n requests: no location included in request")
-		return clientError(http.StatusBadRequest)
+		return clientError(http.StatusBadRequest, errors.New("\n no location included in request"))
 	}
-
+	// Create Open311 Request and load into DynamoDB Requests table
 	response, err := repository.SubmitRequest(Open311request)
 	if err != nil {
-		return serverError(err)
+		return serverError(http.StatusInternalServerError, err)
 	}
 
 	body, err := json.Marshal(response)
 	if err != nil {
-		//TODO throw server error here instead
-		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		return serverError(http.StatusInternalServerError, errors.New("\n Unable to marshal JSON for request response"))
 	}
 
 	return events.APIGatewayProxyResponse{
-		StatusCode: 201, // TODO fulfill REST standards of 201 response
+		StatusCode: http.StatusCreated,
 		Headers:    map[string]string{"content-type": "application/json"},
 		Body:       string(body),
 	}, nil
 }
 
-func serverError(err error) (events.APIGatewayProxyResponse, error) {
+func serverError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())
-
-	// TODO provide caller more context  (error code, etc)
 	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusInternalServerError, //TODO figure out way to generate right HTML code
-		Body:       http.StatusText(http.StatusInternalServerError),
+		StatusCode: statusCode,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       http.StatusText(statusCode) + err.Error(),
 	}, nil
 }
 
-func clientError(status int) (events.APIGatewayProxyResponse, error) {
+func clientError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
+	warningLogger.Println(err.Error())
 	return events.APIGatewayProxyResponse{
-		StatusCode: status,
-		Body:       http.StatusText(status),
+		StatusCode: statusCode,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       http.StatusText(statusCode) + err.Error(),
 	}, nil
 }
 

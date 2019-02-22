@@ -2,16 +2,20 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/social-torch/open311-services/repository"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/social-torch/open311-services/repository"
 )
 
-var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
+var infoLogger = log.New(os.Stdout, "INFO\t", 0)
+var warningLogger = log.New(os.Stderr, "WARNING\t", log.Lshortfile)
+var errorLogger = log.New(os.Stderr, "ERROR\t", log.Lshortfile)
 
 // Route requests
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -26,7 +30,8 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 			return getCities()
 		}
 	}
-	return clientError(http.StatusMethodNotAllowed)
+	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET'"))
+
 }
 
 func getCity(id string) (events.APIGatewayProxyResponse, error) {
@@ -34,53 +39,58 @@ func getCity(id string) (events.APIGatewayProxyResponse, error) {
 	if err != nil {
 		switch err.(type) {
 		case *repository.CityNotFoundErr:
-			errorMessage := fmt.Sprintf("city handler error: \n %s \n  city_name: %s not in repository", err, id)
-			errorLogger.Println(errorMessage)
-			return events.APIGatewayProxyResponse{Body: errorMessage, StatusCode: 404}, nil
+			errorMessage := fmt.Errorf("%s.  city_name '%s' not in database", err, id)
+			return clientError(http.StatusNotFound, errorMessage)
 		default:
-			return serverError(err)
+			return serverError(http.StatusInternalServerError, err)
 		}
 	}
 
 	body, err := json.Marshal(&city)
 	if err != nil {
-		//TODO throw server error here instead
-		return serverError(fmt.Errorf("city handler: unable to marshal service: \n %+v \n %s", city, err))
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetCity() struct"))
 	}
 
-	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
+	}, nil
 }
 
 func getCities() (events.APIGatewayProxyResponse, error) {
 	cities, err := repository.GetCities()
 	if err != nil {
-		return serverError(err)
+		return serverError(http.StatusInternalServerError, err)
 	}
 
 	body, err := json.Marshal(cities)
 	if err != nil {
-		//TODO throw server error here instead
-		return events.APIGatewayProxyResponse{Body: "Unable to marshal JSON", StatusCode: 500}, nil
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetCities() struct"))
 	}
-	return events.APIGatewayProxyResponse{Body: string(body), StatusCode: 200}, nil
-}
 
-func serverError(err error) (events.APIGatewayProxyResponse, error) {
-	errorLogger.Println(err.Error())
-	//TODO  Need to provide more context to the user based on error
-	// See https://wiki.open311.org/GeoReport_v2/#errors
 	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusInternalServerError,
-		Body:       http.StatusText(http.StatusInternalServerError),
+		StatusCode: http.StatusOK,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
 	}, nil
 }
 
-func clientError(status int) (events.APIGatewayProxyResponse, error) {
-	//TODO provide more context
-	// See https://wiki.open311.org/GeoReport_v2/#errors
+func serverError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
+	errorLogger.Println(err.Error())
 	return events.APIGatewayProxyResponse{
-		StatusCode: status,
-		Body:       http.StatusText(status),
+		StatusCode: statusCode,
+		Headers:    map[string]string{"content-type": "text/plain"},
+		Body:       http.StatusText(statusCode) + ": " + err.Error(),
+	}, nil
+}
+
+func clientError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
+	warningLogger.Println(err.Error())
+	return events.APIGatewayProxyResponse{
+		StatusCode: statusCode,
+		Headers:    map[string]string{"content-type": "text/plain"},
+		Body:       http.StatusText(statusCode) + ": " + err.Error(),
 	}, nil
 }
 

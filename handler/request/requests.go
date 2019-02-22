@@ -13,8 +13,9 @@ import (
 	"github.com/social-torch/open311-services/repository"
 )
 
-var errorLogger = log.New(os.Stderr, "ERROR ", log.Llongfile)
-var warningLogger = log.New(os.Stderr, "WARNING ", log.Llongfile)
+var infoLogger = log.New(os.Stdout, "INFO\t", 0)
+var warningLogger = log.New(os.Stderr, "WARNING\t", log.Lshortfile)
+var errorLogger = log.New(os.Stderr, "ERROR\t", log.Lshortfile)
 
 /// Route requests
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -32,7 +33,7 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 	case "POST":
 		return submitRequest(req)
 	}
-	return clientError(http.StatusMethodNotAllowed, errors.New("\n method must be 'GET' or 'POST'"))
+	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET' or 'POST'"))
 }
 
 func getRequest(id string) (events.APIGatewayProxyResponse, error) {
@@ -40,7 +41,7 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 	if err != nil {
 		switch err.(type) {
 		case *repository.RequestIdNotFoundErr:
-			errorMessage := fmt.Errorf("\n request handler error: \n %s \n  service_request_id: %s not in database", err, id)
+			errorMessage := fmt.Errorf("%s. service_request_id '%s' not in database", err, id)
 			return clientError(http.StatusNotFound, errorMessage)
 		default:
 			return serverError(http.StatusInternalServerError, err)
@@ -49,7 +50,7 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(&request)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("\n error marshalling GetRequest() struct"))
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetRequest() struct"))
 	}
 
 	return events.APIGatewayProxyResponse{
@@ -67,7 +68,7 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 	body, err := json.Marshal(requests)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("\n error marshalling GetRequests() struct"))
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetRequests() struct"))
 	}
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
@@ -81,18 +82,18 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	var Open311request repository.Request
 	err := json.Unmarshal([]byte(req.Body), &Open311request)
 	if err != nil {
-		return clientError(http.StatusUnprocessableEntity, errors.New("\n error unmarshalling Request JSON. Check syntax"))
+		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling Request JSON. Check syntax"))
 	}
 
 	// Make sure Request has minimum amount of information in order to create new 311 request
 	// Check that service code exists in Services table
 	if !repository.IsValidServiceCode(Open311request.ServiceCode) {
-		return clientError(http.StatusBadRequest, errors.New("\n invalid Service Code: "+Open311request.ServiceCode))
+		return clientError(http.StatusBadRequest, errors.New("invalid Service Code: "+Open311request.ServiceCode))
 	}
 
 	// Check that request has a location
 	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
-		return clientError(http.StatusBadRequest, errors.New("\n no location included in request"))
+		return clientError(http.StatusBadRequest, errors.New("no location included in request"))
 	}
 	// Create Open311 Request and load into DynamoDB Requests table
 	response, err := repository.SubmitRequest(Open311request)
@@ -102,8 +103,10 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 	body, err := json.Marshal(response)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("\n Unable to marshal JSON for request response"))
+		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for request response"))
 	}
+
+	infoLogger.Println("New Request submitted: " + response.ServiceRequestID)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,
@@ -116,8 +119,8 @@ func serverError(statusCode int, err error) (events.APIGatewayProxyResponse, err
 	errorLogger.Println(err.Error())
 	return events.APIGatewayProxyResponse{
 		StatusCode: statusCode,
-		Headers:    map[string]string{"content-type": "application/json"},
-		Body:       http.StatusText(statusCode) + err.Error(),
+		Headers:    map[string]string{"content-type": "text/plain"},
+		Body:       http.StatusText(statusCode) + ": " + err.Error(),
 	}, nil
 }
 
@@ -125,8 +128,8 @@ func clientError(statusCode int, err error) (events.APIGatewayProxyResponse, err
 	warningLogger.Println(err.Error())
 	return events.APIGatewayProxyResponse{
 		StatusCode: statusCode,
-		Headers:    map[string]string{"content-type": "application/json"},
-		Body:       http.StatusText(statusCode) + err.Error(),
+		Headers:    map[string]string{"content-type": "text/plain"},
+		Body:       http.StatusText(statusCode) + ": " + err.Error(),
 	}, nil
 }
 

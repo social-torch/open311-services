@@ -1,0 +1,26 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Open311TableAccess",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:Scan"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:*:*:table/Cities",
+                "arn:aws:dynamodb:*:*:table/Requests",
+                "arn:aws:dynamodb:*:*:table/Services"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem"
+            ],
+            "Resource": "arn:aws:dynamodb:*:*:table/Requests"
+        }
+    ]
+}

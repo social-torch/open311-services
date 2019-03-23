@@ -57,6 +57,28 @@ Resources:
           Properties:
             Path: /city/{id}
             Method: get
+  Users:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/user
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetRequests:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: get
+        GetRequest:
+          Type: Api
+          Properties:
+            Path: /user/{id}
+            Method: get
+        PostRequest:
+          Type: Api
+          Properties:
+            Path: /user
+            Method: post
 
 Outputs:
   URL:

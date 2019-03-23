@@ -17,7 +17,7 @@ const (
 	ServicesTable = "Services"
 	RequestsTable = "Requests"
 	CitiesTable   = "Cities"
-	UserTable     = "Users"
+	UsersTable    = "Users"
 	AwsRegion     = endpoints.UsEast1RegionID // "us-east-1" // US East (N. Virginia).
 )
 const (
@@ -89,10 +89,14 @@ type RequestResponse struct {
 	AccountID        string `json:"account_id"`         // Unique ID for the user account of the person submitting the request
 }
 
+type UserResponse struct {
+	AccountID string `json:"account_id"` // Unique ID for the user account
+}
+
 type User struct {
-	UserID            string    `json:"user_id"`            // Unique ID of Open311 User
-	SubmittedRequests []Request `json:"submitted_requests"` // Slice of requests user has made
-	WatchedRequests   []Request `json:"watched_requests"`   // Slice of request user is watching
+	AccountID         string   `json:"account_id"`            // Unique ID of Open311 User
+	SubmittedRequests []string `json:"submitted_request_ids"` // Slice of requests user has made
+	WatchedRequests   []string `json:"watched_request_ids"`   // Slice of request user is watching
 }
 
 // Assumes each jurisdiction has its own AWS endpoint
@@ -122,6 +126,22 @@ type CityNotFoundErr struct {
 }
 
 func (e *CityNotFoundErr) Error() string {
+	return e.message
+}
+
+type AccountIDNotFoundErr struct {
+	message string
+}
+
+func (e *AccountIDNotFoundErr) Error() string {
+	return e.message
+}
+
+type UserIDAlreadyExistsErr struct {
+	message string
+}
+
+func (e *UserIDAlreadyExistsErr) Error() string {
 	return e.message
 }
 
@@ -274,7 +294,7 @@ func GetRequest(id string) (Request, error) {
 	return request, err
 }
 
-func SubmitRequest(request Request, userID string) (RequestResponse, error) {
+func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	svc, err := createDynamoClient()
 	if err != nil {
 		return RequestResponse{}, err
@@ -283,7 +303,7 @@ func SubmitRequest(request Request, userID string) (RequestResponse, error) {
 	// Get unique identifier by which this new request will be submitted.
 	requestID, err := genRequestID()
 	if err != nil {
-		return RequestResponse{}, fmt.Errorf("\nrepository: failed to generate unique id for new request. \n  %s", err)
+		return RequestResponse{}, fmt.Errorf("repository: failed to generate unique id for new request. \n  %s", err)
 	}
 	request.ServiceRequestID = requestID
 
@@ -313,25 +333,196 @@ func SubmitRequest(request Request, userID string) (RequestResponse, error) {
 		return RequestResponse{}, fmt.Errorf("repository: failed to put new request in database: \n input: %+v. \n %s", input, err)
 	}
 
-	// Add new request to list of requests created by this user
-	_, err = trackUserRequest(userID, requestID)
-	if err != nil {
-		//log error
-	}
-
 	var response RequestResponse
-	response.AccountID = userID
+	response.AccountID = accountID
 	response.ServiceRequestID = requestID
+
+	// Add new request to list of requests created by this user
+	_, err = trackUserRequest(accountID, requestID)
+	if err != nil {
+		return response, fmt.Errorf("repository: failed to append new request (%s) to list of requests for account: %s\n  %s", requestID, accountID, err)
+	}
 
 	return response, err
 }
 
 // trackUserRequest updates the Users table to append a request to the list of requsts a user has created
 func trackUserRequest(userID string, requestID string) (*dynamodb.UpdateItemOutput, error) {
-	// TODO implement funcion
-	// see: https://stackoverflow.com/questions/31288085/how-to-append-a-value-to-list-attribute-on-aws-dynamodb
-	// handle cases where userID is "Guest" or nil
-	return nil, nil
+	svc, err := createDynamoClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Documenation is hard to find.  start with these:
+	// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.SET.AddingListsAndMaps
+	// https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/dynamodb/update_item.go
+	// https://gist.github.com/wliao008/e0dba6a3cf089d46932d39b90f9d838f
+	// https://msanatan.com/2018/08/31/dynamodb-lambdas-go-and-an-empty-list/
+	// note that dynamo cannot store empty sets, using lists instead of string set.
+
+	input := &dynamodb.UpdateItemInput{
+		ExpressionAttributeNames: map[string]*string{
+			"#SR": aws.String("submitted_request_ids"),
+		},
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":r": {
+				L: []*dynamodb.AttributeValue{
+					&dynamodb.AttributeValue{S: aws.String(requestID)},
+				},
+			},
+			":empty_list": {
+				L: []*dynamodb.AttributeValue{},
+			},
+		},
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(userID),
+			},
+		},
+		ReturnValues:     aws.String("ALL_NEW"),
+		TableName:        aws.String(UsersTable),
+		UpdateExpression: aws.String("SET #SR = list_append(if_not_exists(#SR, :empty_list), :r)"),
+	}
+
+	result, err := svc.UpdateItem(input)
+	if err != nil {
+		return result, fmt.Errorf("repository: failed to append request to list of User's requests. \n  %s", err)
+	}
+
+	return result, err
+
+}
+
+// AddUser checks if the account ID already exists in the database and if not,
+// initializes a new user with no submitted or watched requests
+func AddUser(user User) (UserResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return UserResponse{}, err
+	}
+
+	accountID := user.AccountID
+
+	// Check if user already exists
+	getInput := &dynamodb.GetItemInput{
+		TableName: aws.String(UsersTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(accountID),
+			},
+		},
+	}
+
+	result, err := svc.GetItem(getInput)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("\n repository: unable to check if user existed in database with the following input: \n  %+v. \n   %s", getInput, err)
+	}
+
+	// If the AccountID isn't in the database, GetItem does not return any data and there will be no Item element in the response.
+	if result.Item != nil {
+		return UserResponse{}, &UserIDAlreadyExistsErr{"account ID already exists"}
+	}
+
+	// Now that we know the account ID is new/unique, intitialize it with no submitted or tracked requests
+	user.SubmittedRequests = []string{}
+	// TODO - dynamo can't store empty string sets. check if marshaler converts this to list or string set.
+	//  perhaps use dynamodbav omitempty tag
+	user.WatchedRequests = []string{}
+
+	av, err := dynamodbattribute.MarshalMap(user)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", user, err)
+	}
+
+	// Add new user to database
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(UsersTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response UserResponse
+	response.AccountID = accountID
+
+	return response, err
+}
+
+func GetUsers() ([]User, error) {
+	return allUsers()
+}
+
+func allUsers() ([]User, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return []User{}, err
+	}
+
+	// Build the query input parameters
+	params := &dynamodb.ScanInput{
+		TableName: aws.String(UsersTable),
+	}
+
+	// Make the DynamoDB Query API call
+	// TODO handle pagination
+	result, err := svc.Scan(params)
+	if err != nil {
+		return nil, fmt.Errorf("repository: unable to get all users from database with the following parameters: %+v. \n  %s", params, err)
+	}
+
+	users := []User{}
+
+	// TODO - investigate UnmarshalListOfMaps here
+	// For each user, unmarshal and add to array of users
+	for _, i := range result.Items {
+		user := User{}
+		err = dynamodbattribute.UnmarshalMap(i, &user)
+		if err != nil {
+			return users, fmt.Errorf("\n repository: Failed to unmarshal record: \n %+v \n   %s", i, err)
+		}
+
+		users = append(users, user)
+	}
+	return users, err
+}
+
+// GetUser takes a user's AccountID, looks up that user in DynamoDB and returns the corresponding
+// User struct.  If the requested AccountID is not in the database, an AccountIDNotFoundErr error is set
+func GetUser(accountID string) (User, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return User{}, err
+	}
+
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String(UsersTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(accountID),
+			},
+		},
+	}
+
+	result, err := svc.GetItem(input)
+	if err != nil {
+		return User{}, fmt.Errorf("\n repository: unable to get specified user from database with the following input: \n  %+v. \n   %s", input, err)
+	}
+
+	user := User{}
+
+	err = dynamodbattribute.UnmarshalMap(result.Item, &user)
+	if err != nil {
+		return user, fmt.Errorf("\n repository: Failed to unmarshal user record from database: \n  %+v. \n   %s", result.Item, err)
+	}
+
+	if user.AccountID == "" {
+		return user, &AccountIDNotFoundErr{"user not found"}
+	}
+
+	return user, err
 }
 
 // createDynamoClient is a convenience function to establish a session with AWS and

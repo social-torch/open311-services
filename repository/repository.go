@@ -17,6 +17,7 @@ const (
 	ServicesTable = "Services"
 	RequestsTable = "Requests"
 	CitiesTable   = "Cities"
+	UsersTable    = "Users"
 	AwsRegion     = endpoints.UsEast1RegionID // "us-east-1" // US East (N. Virginia).
 )
 const (
@@ -62,7 +63,7 @@ type AttributeValue struct {
 
 // Issues that have been reported as service requests.  Location is submitted via lat/long or address
 type Request struct {
-	ServiceRequestId  string           `json:"service_request_id"` // The unique ID of the service request created.
+	ServiceRequestID  string           `json:"service_request_id"` // The unique ID of the service request created.
 	Status            string           `json:"status"`             // The current status of the service request.
 	StatusNotes       string           `json:"status_notes"`       // Explanation of why status was changed to current state or more details on current status than conveyed with status alone.
 	ServiceName       string           `json:"service_name"`       // The human readable name of the service request type
@@ -74,11 +75,11 @@ type Request struct {
 	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
 	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
 	Address           string           `json:"address"`            // Human readable address or description of location.
-	AddressId         string           `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
+	AddressID         string           `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaUrl          string           `json:"media_url"`          // A URL to media associated with the request, eg an image.
+	MediaURL          string           `json:"media_url"`          // A URL to media associated with the request, eg an image.
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
 
@@ -86,6 +87,16 @@ type RequestResponse struct {
 	ServiceRequestID string `json:"service_request_id"` // The unique ID of the service request created.
 	ServiceNotice    string `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported
 	AccountID        string `json:"account_id"`         // Unique ID for the user account of the person submitting the request
+}
+
+type UserResponse struct {
+	AccountID string `json:"account_id"` // Unique ID for the user account
+}
+
+type User struct {
+	AccountID         string   `json:"account_id"`            // Unique ID of Open311 User
+	SubmittedRequests []string `json:"submitted_request_ids"` // Slice of requests user has made
+	WatchedRequests   []string `json:"watched_request_ids"`   // Slice of request user is watching
 }
 
 // Assumes each jurisdiction has its own AWS endpoint
@@ -118,6 +129,22 @@ func (e *CityNotFoundErr) Error() string {
 	return e.message
 }
 
+type AccountIDNotFoundErr struct {
+	message string
+}
+
+func (e *AccountIDNotFoundErr) Error() string {
+	return e.message
+}
+
+type UserIDAlreadyExistsErr struct {
+	message string
+}
+
+func (e *UserIDAlreadyExistsErr) Error() string {
+	return e.message
+}
+
 // GetServices returns array of all Open311 Services in DynamoBD Service Table
 func GetServices() ([]Service, error) {
 	return allServices()
@@ -135,6 +162,7 @@ func allServices() ([]Service, error) {
 	}
 
 	// Make the DynamoDB Query API call
+	// TODO handle pagination
 	result, err := svc.Scan(params)
 	if err != nil {
 		return nil, fmt.Errorf("\n repository: unable to get all services from database with the following parameters: %+v. \n  %s", params, err)
@@ -142,6 +170,7 @@ func allServices() ([]Service, error) {
 
 	services := []Service{}
 
+	// TODO - investigate UnmarshalListOfMaps here
 	// For each service, unmarshal and add to array of services
 	for _, i := range result.Items {
 		service := Service{}
@@ -208,6 +237,7 @@ func allRequests() ([]Request, error) {
 	}
 
 	// Make the DynamoDB Query API call
+	// TODO handle pagination
 	result, err := svc.Scan(params)
 	if err != nil {
 		return nil, fmt.Errorf("repository: unable to get all requests from database with the following parameters: %+v. \n %s", params, err)
@@ -257,14 +287,14 @@ func GetRequest(id string) (Request, error) {
 		return request, fmt.Errorf("repository: Failed to unmarshal request record from database: %+v. \n %s", result.Item, err)
 	}
 
-	if request.ServiceRequestId == "" {
+	if request.ServiceRequestID == "" {
 		return Request{}, &RequestIdNotFoundErr{"request not found"}
 	}
 
 	return request, err
 }
 
-func SubmitRequest(request Request) (RequestResponse, error) {
+func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	svc, err := createDynamoClient()
 	if err != nil {
 		return RequestResponse{}, err
@@ -273,9 +303,9 @@ func SubmitRequest(request Request) (RequestResponse, error) {
 	// Get unique identifier by which this new request will be submitted.
 	requestID, err := genRequestID()
 	if err != nil {
-		return RequestResponse{}, fmt.Errorf("\nrepository: failed to generate unique id for new request. \n  %s", err)
+		return RequestResponse{}, fmt.Errorf("repository: failed to generate unique id for new request. \n  %s", err)
 	}
-	request.ServiceRequestId = requestID
+	request.ServiceRequestID = requestID
 
 	// Assign requested_datetime
 	t := time.Now()
@@ -304,9 +334,195 @@ func SubmitRequest(request Request) (RequestResponse, error) {
 	}
 
 	var response RequestResponse
+	response.AccountID = accountID
 	response.ServiceRequestID = requestID
 
+	// Add new request to list of requests created by this user
+	_, err = trackUserRequest(accountID, requestID)
+	if err != nil {
+		return response, fmt.Errorf("repository: failed to append new request (%s) to list of requests for account: %s\n  %s", requestID, accountID, err)
+	}
+
 	return response, err
+}
+
+// trackUserRequest updates the Users table to append a request to the list of requsts a user has created
+func trackUserRequest(userID string, requestID string) (*dynamodb.UpdateItemOutput, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Documenation is hard to find.  start with these:
+	// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.SET.AddingListsAndMaps
+	// https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/dynamodb/update_item.go
+	// https://gist.github.com/wliao008/e0dba6a3cf089d46932d39b90f9d838f
+	// https://msanatan.com/2018/08/31/dynamodb-lambdas-go-and-an-empty-list/
+	// note that dynamo cannot store empty sets, using lists instead of string set.
+
+	input := &dynamodb.UpdateItemInput{
+		ExpressionAttributeNames: map[string]*string{
+			"#SR": aws.String("submitted_request_ids"),
+		},
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":r": {
+				L: []*dynamodb.AttributeValue{
+					&dynamodb.AttributeValue{S: aws.String(requestID)},
+				},
+			},
+			":empty_list": {
+				L: []*dynamodb.AttributeValue{},
+			},
+		},
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(userID),
+			},
+		},
+		ReturnValues:     aws.String("ALL_NEW"),
+		TableName:        aws.String(UsersTable),
+		UpdateExpression: aws.String("SET #SR = list_append(if_not_exists(#SR, :empty_list), :r)"),
+	}
+
+	result, err := svc.UpdateItem(input)
+	if err != nil {
+		return result, fmt.Errorf("repository: failed to append request to list of User's requests. \n  %s", err)
+	}
+
+	return result, err
+
+}
+
+// AddUser checks if the account ID already exists in the database and if not,
+// initializes a new user with no submitted or watched requests
+func AddUser(user User) (UserResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return UserResponse{}, err
+	}
+
+	accountID := user.AccountID
+
+	// Check if user already exists
+	getInput := &dynamodb.GetItemInput{
+		TableName: aws.String(UsersTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(accountID),
+			},
+		},
+	}
+
+	result, err := svc.GetItem(getInput)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("\n repository: unable to check if user existed in database with the following input: \n  %+v. \n   %s", getInput, err)
+	}
+
+	// If the AccountID isn't in the database, GetItem does not return any data and there will be no Item element in the response.
+	if result.Item != nil {
+		return UserResponse{}, &UserIDAlreadyExistsErr{"account ID already exists"}
+	}
+
+	// Now that we know the account ID is new/unique, intitialize it with no submitted or tracked requests
+	user.SubmittedRequests = []string{}
+	// TODO - dynamo can't store empty string sets. check if marshaler converts this to list or string set.
+	//  perhaps use dynamodbav omitempty tag
+	user.WatchedRequests = []string{}
+
+	av, err := dynamodbattribute.MarshalMap(user)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", user, err)
+	}
+
+	// Add new user to database
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(UsersTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response UserResponse
+	response.AccountID = accountID
+
+	return response, err
+}
+
+func GetUsers() ([]User, error) {
+	return allUsers()
+}
+
+func allUsers() ([]User, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return []User{}, err
+	}
+
+	// Build the query input parameters
+	params := &dynamodb.ScanInput{
+		TableName: aws.String(UsersTable),
+	}
+
+	// Make the DynamoDB Query API call
+	// TODO handle pagination
+	result, err := svc.Scan(params)
+	if err != nil {
+		return nil, fmt.Errorf("repository: unable to get all users from database with the following parameters: %+v. \n  %s", params, err)
+	}
+
+	users := []User{}
+
+	// TODO - investigate UnmarshalListOfMaps here
+	// For each user, unmarshal and add to array of users
+	for _, i := range result.Items {
+		user := User{}
+		err = dynamodbattribute.UnmarshalMap(i, &user)
+		if err != nil {
+			return users, fmt.Errorf("\n repository: Failed to unmarshal record: \n %+v \n   %s", i, err)
+		}
+
+		users = append(users, user)
+	}
+	return users, err
+}
+
+// GetUser takes a user's AccountID, looks up that user in DynamoDB and returns the corresponding
+// User struct.  If the requested AccountID is not in the database, an AccountIDNotFoundErr error is set
+func GetUser(accountID string) (User, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return User{}, err
+	}
+
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String(UsersTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			"account_id": {
+				S: aws.String(accountID),
+			},
+		},
+	}
+
+	result, err := svc.GetItem(input)
+	if err != nil {
+		return User{}, fmt.Errorf("\n repository: unable to get specified user from database with the following input: \n  %+v. \n   %s", input, err)
+	}
+
+	user := User{}
+
+	err = dynamodbattribute.UnmarshalMap(result.Item, &user)
+	if err != nil {
+		return user, fmt.Errorf("\n repository: Failed to unmarshal user record from database: \n  %+v. \n   %s", result.Item, err)
+	}
+
+	if user.AccountID == "" {
+		return user, &AccountIDNotFoundErr{"user not found"}
+	}
+
+	return user, err
 }
 
 // createDynamoClient is a convenience function to establish a session with AWS and
@@ -334,6 +550,7 @@ func createDynamoClient() (*dynamodb.DynamoDB, error) {
 func IsValidServiceCode(ServiceCode string) bool {
 	svc, err := createDynamoClient()
 	if err != nil {
+		// TODO send this to os.Stderr so the AWS cloudwatch logs pick it up
 		fmt.Printf("\nERROR: repository/IsValidServiceCode: unable to establish session with AWS \n  %s", err)
 		return false
 	}
@@ -348,6 +565,7 @@ func IsValidServiceCode(ServiceCode string) bool {
 	}
 	response, err := svc.GetItem(input)
 	if err != nil {
+		// TODO send this to os.Stderr so the AWS cloudwatch logs pick it up
 		fmt.Printf("\nERROR: repository: "+
 			"Query API call failed while checking if Service Code was valid. \n   %s", err)
 	}
@@ -387,6 +605,7 @@ func allCities() ([]City, error) {
 	}
 
 	// Make the DynamoDB Query API call
+	// TODO handle pagination
 	result, err := svc.Scan(params)
 	if err != nil {
 		return nil, fmt.Errorf("\n repository: unable to get all cities from database with the following parameters: %+v. \n  %s", params, err)

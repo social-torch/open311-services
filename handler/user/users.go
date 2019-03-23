@@ -21,36 +21,36 @@ var errorLogger = log.New(os.Stderr, "ERROR\t", log.Lshortfile)
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	switch req.HTTPMethod {
 	case "GET":
-		if req.Resource == "/request/{id}" {
+		if req.Resource == "/user/{id}" {
 			id := req.PathParameters["id"]
-			return getRequest(id)
+			return getUser(id)
 		}
 
-		if req.Resource == "/requests" {
-			return getRequests()
+		if req.Resource == "/users" {
+			return getUsers()
 		}
 
 	case "POST":
-		return submitRequest(req)
+		return addUser(req)
 	}
 	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET' or 'POST'"))
 }
 
-func getRequest(id string) (events.APIGatewayProxyResponse, error) {
-	request, err := repository.GetRequest(id)
+func getUser(accountID string) (events.APIGatewayProxyResponse, error) {
+	user, err := repository.GetUser(accountID)
 	if err != nil {
 		switch err.(type) {
-		case *repository.RequestIdNotFoundErr:
-			errorMessage := fmt.Errorf("%s. service_request_id '%s' not in database", err, id)
+		case *repository.AccountIDNotFoundErr:
+			errorMessage := fmt.Errorf("%s. account_id: '%s' not in database", err, accountID)
 			return clientError(http.StatusNotFound, errorMessage)
 		default:
 			return serverError(http.StatusInternalServerError, err)
 		}
 	}
 
-	body, err := json.Marshal(&request)
+	body, err := json.Marshal(&user)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetRequest() struct"))
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling User struct"))
 	}
 
 	return events.APIGatewayProxyResponse{
@@ -60,15 +60,15 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 	}, nil
 }
 
-func getRequests() (events.APIGatewayProxyResponse, error) {
-	requests, err := repository.GetRequests()
+func getUsers() (events.APIGatewayProxyResponse, error) {
+	users, err := repository.GetUsers()
 	if err != nil {
 		return serverError(http.StatusInternalServerError, err)
 	}
 
-	body, err := json.Marshal(requests)
+	body, err := json.Marshal(users)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("error marshalling GetRequests() struct"))
+		return serverError(http.StatusInternalServerError, errors.New("error marshalling Users struct"))
 	}
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
@@ -77,41 +77,37 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 	}, nil
 }
 
-func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
-	userID := req.RequestContext.Identity.CognitoIdentityID
-	if userID == "" {
-		userID = "Guest"
-	}
-
-	var Open311request repository.Request
-	err := json.Unmarshal([]byte(req.Body), &Open311request)
+func addUser(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	var user repository.User
+	err := json.Unmarshal([]byte(req.Body), &user)
 	if err != nil {
-		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling Request JSON. Check syntax"))
+		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling User JSON. Check syntax"))
 	}
 
-	// Make sure Request has minimum amount of information in order to create new 311 request
-	// Check that service code exists in Services table
-	if !repository.IsValidServiceCode(Open311request.ServiceCode) {
-		return clientError(http.StatusBadRequest, errors.New("invalid Service Code: "+Open311request.ServiceCode))
+	accountID := user.AccountID
+	cognitoID := req.RequestContext.Identity.CognitoIdentityID
+	if accountID != cognitoID {
+		warningLogger.Printf("specified AccountID (%s) does not match current CognitoID (%s).  Something is fishy... \n", accountID, cognitoID)
 	}
 
-	// Check that request has a location
-	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
-		return clientError(http.StatusBadRequest, errors.New("no location included in request"))
-	}
-	// Create Open311 Request and load into DynamoDB Requests table
-	response, err := repository.SubmitRequest(Open311request, userID)
+	// Create new user and load into DynamoDB Users table
+	response, err := repository.AddUser(user)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, err)
+		switch err.(type) {
+		case *repository.UserIDAlreadyExistsErr:
+			errorMessage := fmt.Errorf("%s. account_id '%s' is taken", err, accountID)
+			return clientError(http.StatusConflict, errorMessage)
+		default:
+			return serverError(http.StatusInternalServerError, err)
+		}
 	}
 
 	body, err := json.Marshal(response)
 	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for request response"))
+		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON from AddUser response"))
 	}
 
-	infoLogger.Println("New Request submitted: " + response.ServiceRequestID)
+	infoLogger.Println("New User Added: " + response.AccountID)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,

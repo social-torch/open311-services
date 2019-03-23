@@ -39,7 +39,8 @@ deploy:
 		--template-file package.yml \
 		--region $(AWS_REGION) \
 		--capabilities CAPABILITY_IAM \
-		--stack-name $(AWS_STACK_NAME)
+		--stack-name $(AWS_STACK_NAME) \
+		--parameter-overrides "Stage=$(AWS_STAGE)" "CognitoUserPool=$(AWS_USER_POOL)"
 
 describe:
 	@aws cloudformation describe-stacks \

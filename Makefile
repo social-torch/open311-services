@@ -40,7 +40,7 @@ deploy:
 		--region $(AWS_REGION) \
 		--capabilities CAPABILITY_IAM \
 		--stack-name $(AWS_STACK_NAME) \
-		--parameter-overrides "Stage=$(AWS_STAGE)" "CognitoUserPool=$(AWS_USER_POOL)"
+		--parameter-overrides "Stage=$(AWS_STAGE)" "CognitoUserPool=$(AWS_USER_POOL)" "ImageBucket=$(AWS_IMAGE_BUCKET_NAME)"
 
 describe:
 	@aws cloudformation describe-stacks \

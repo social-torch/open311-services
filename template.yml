@@ -7,6 +7,8 @@ Parameters:
     Type: String
   CognitoUserPool:
     Type: String
+  ImageBucket:
+    Type: String
 
 Resources:
   Open311APIGateway:
@@ -63,6 +65,28 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /request
             Method: post
+  Images:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/images
+      Runtime: go1.x
+      Tracing: Active
+      Environment:
+        Variables:
+          IMAGE_BUCKET: !Ref ImageBucket
+      Events:
+        GetFetchURL:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /images/fetch/{key}
+            Method: get
+        GetStoreURL:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /images/store/{key}
+            Method: get
   Cities:
     Type: AWS::Serverless::Function
     Properties:

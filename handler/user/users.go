@@ -85,10 +85,6 @@ func addUser(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse,
 	}
 
 	accountID := user.AccountID
-	cognitoID := req.RequestContext.Identity.CognitoIdentityID
-	if accountID != cognitoID {
-		warningLogger.Printf("specified AccountID (%s) does not match current CognitoID (%s).  Something is fishy... \n", accountID, cognitoID)
-	}
 
 	// Create new user and load into DynamoDB Users table
 	response, err := repository.AddUser(user)

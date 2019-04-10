@@ -79,9 +79,9 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	userID := req.RequestContext.Identity.CognitoIdentityID
-	if userID == "" {
-		userID = "Guest"
+	userID := req.Headers["from"] // accountID must be added to header in client app
+	if userID == "" {             // but just in case the client app doesn't, track request as a guest
+		userID = "guest"
 	}
 
 	var Open311request repository.Request

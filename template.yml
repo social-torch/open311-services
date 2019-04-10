@@ -113,25 +113,12 @@ Resources:
       Runtime: go1.x
       Tracing: Active
       Events:
-        GetRequests:
-          Type: Api
-          Properties:
-            RestApiId: !Ref Open311APIGateway
-            Path: /users
-            Method: get
         GetRequest:
           Type: Api
           RestApiId: !Ref Open311APIGateway
           Properties:
             Path: /user/{id}
             Method: get
-        PostRequest:
-          Type: Api
-          Properties:
-            RestApiId: !Ref Open311APIGateway
-            Path: /user
-            Method: post
-
 Outputs:
   URL:
     Description: URL for HTTPS Endpoint

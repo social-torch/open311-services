@@ -33,6 +33,9 @@ AWS_ACCOUNT_ID=1234567890
 AWS_BUCKET_NAME=your-bucket-name-for-cloudformation-package-data
 AWS_STACK_NAME=your-cloudformation-stack-name
 AWS_REGION=us-west-1
+AWS_STAGE=Prod
+AWS_USER_POOL=your-cognito-pool-arn
+AWS_IMAGE_BUCKET_NAME=your-s3-bucket-name
 ```
 
 ### Install AWS CLI

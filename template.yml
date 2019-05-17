@@ -87,6 +87,19 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /images/store/{key}
             Method: get
+  Users:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/user
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /user/{id}
+            Method: get
   Cities:
     Type: AWS::Serverless::Function
     Properties:
@@ -106,19 +119,7 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /city/{id}
             Method: get
-  Users:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: dist/handler/user
-      Runtime: go1.x
-      Tracing: Active
-      Events:
-        GetRequest:
-          Type: Api
-          RestApiId: !Ref Open311APIGateway
-          Properties:
-            Path: /user/{id}
-            Method: get
+
 Outputs:
   URL:
     Description: URL for HTTPS Endpoint

@@ -79,6 +79,11 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 
 func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
+	userID := req.Headers["from"] // accountID must be added to header in client app
+	if userID == "" {             // but just in case the client app doesn't, track request as a guest
+		userID = "guest"
+	}
+
 	var Open311request repository.Request
 	err := json.Unmarshal([]byte(req.Body), &Open311request)
 	if err != nil {
@@ -96,7 +101,7 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		return clientError(http.StatusBadRequest, errors.New("no location included in request"))
 	}
 	// Create Open311 Request and load into DynamoDB Requests table
-	response, err := repository.SubmitRequest(Open311request)
+	response, err := repository.SubmitRequest(Open311request, userID)
 	if err != nil {
 		return serverError(http.StatusInternalServerError, err)
 	}

@@ -119,6 +119,12 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /city/{id}
             Method: get
+        PostRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /city/onboard
+            Method: post
 
 Outputs:
   URL:

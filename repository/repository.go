@@ -15,10 +15,11 @@ import (
 
 // Names of Open311 tables in dynamoDB
 const (
-	ServicesTable = "Services"
-	RequestsTable = "Requests"
-	CitiesTable   = "Cities"
-	UsersTable    = "Users"
+	ServicesTable	 	= "Services"
+	RequestsTable 	= "Requests"
+	CitiesTable  		= "Cities"
+	UsersTable    	= "Users"
+	OnboardingTable = "OnboardingRequests"
 )
 
 // AwsRegion is the AWS Standard region in which the dynamo tables are created
@@ -108,6 +109,21 @@ type User struct {
 type City struct {
 	CityName string `json:"city_name"`
 	Endpoint string `json:"endpoint"`
+}
+
+// Assumes each jurisdiction has its own AWS endpoint
+type OnboardingRequest struct {
+	ID 				string `json:"id"`
+	City 			string `json:"city"`
+	State 		string `json:"state"`
+	FirstName string `json:"first_name"`
+	LastName 	string `json:"last_name"`
+	Email 		string `json:"email"`
+	Feedback 	string `json:"feedback"`
+}
+
+type OnboardingResponse struct {
+	ID string `json:"id "`
 }
 
 type ServiceCodeNotFoundErr struct {
@@ -572,4 +588,38 @@ func GetCity(id string) (City, error) {
 	}
 
 	return city, err
+}
+
+func AddOnboardingRequest(request OnboardingRequest, accountID string) (OnboardingResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return OnboardingResponse{}, err
+	}
+
+	// Get unique identifier by which this new request will be submitted.
+	id, err := genRequestID()
+	if err != nil {
+		return OnboardingResponse{}, fmt.Errorf("repository: failed to generate unique id for  request. \n  %s", err)
+	}
+	request.ID = id
+
+	av, err := dynamodbattribute.MarshalMap(request)
+	if err != nil {
+		return OnboardingResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", request, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(OnboardingTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return OnboardingResponse{}, fmt.Errorf("repository: failed to put new onboarding entry in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response OnboardingResponse
+	response.ID = id
+
+	return response, err
 }

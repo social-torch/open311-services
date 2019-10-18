@@ -29,6 +29,11 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 		if req.Resource == "/cities" {
 			return getCities()
 		}
+
+	case "POST":
+		if req.Resource == "/city/onboard" {
+			return submitRequest(req)
+		}
 	}
 	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET'"))
 
@@ -75,6 +80,44 @@ func getCities() (events.APIGatewayProxyResponse, error) {
 		Body:       string(body),
 	}, nil
 }
+
+func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	userID := req.Headers["from"] // accountID must be added to header in client app
+	if userID == "" {             // but just in case the client app doesn't, track request as a guest
+		userID = "guest"
+	}
+
+	var onboardingRequest repository.OnboardingRequest
+	err := json.Unmarshal([]byte(req.Body), &onboardingRequest)
+	if err != nil {
+		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling onboarding request JSON. Check syntax"))
+	}
+
+	// Make sure minimum amount of information in order to create onboarding request
+	if onboardingRequest.City == "" && onboardingRequest.State =="" {
+		return clientError(http.StatusBadRequest, errors.New("City and State must be specified"))
+	}
+
+	// Create onboarding request and load into DynamoDB table
+	response, err := repository.AddOnboardingRequest(onboardingRequest, userID)
+	if err != nil {
+		return serverError(http.StatusInternalServerError, err)
+	}
+
+	body, err := json.Marshal(response)
+	if err != nil {
+		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for response"))
+	}
+
+	infoLogger.Println("New onboarding request submitted")
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusCreated,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
+	}, nil
+}
+
 
 func serverError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())

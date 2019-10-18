@@ -1,6 +1,26 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
+Description: API Gateway, Dynamo DB and Cognito Authorizer for Open311
+
+Parameters:
+  Stage:
+    Type: String
+  CognitoUserPool:
+    Type: String
+  ImageBucket:
+    Type: String
+
 Resources:
+  Open311APIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors: "'*'"
+      Auth:
+        DefaultAuthorizer: AuthUser
+        Authorizers:
+          AuthUser:
+            UserPoolArn: !Ref CognitoUserPool
   Services:
     Type: AWS::Serverless::Function
     Properties:
@@ -11,11 +31,13 @@ Resources:
         GetServices:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /services
             Method: get
         GetService:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /service/{id}
             Method: get
   Requests:
@@ -28,18 +50,56 @@ Resources:
         GetRequests:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /requests
             Method: get
         GetRequest:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /request/{id}
             Method: get
         PostRequest:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /request
             Method: post
+  Images:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/images
+      Runtime: go1.x
+      Tracing: Active
+      Environment:
+        Variables:
+          IMAGE_BUCKET: !Ref ImageBucket
+      Events:
+        GetFetchURL:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /images/fetch/{key}
+            Method: get
+        GetStoreURL:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /images/store/{key}
+            Method: get
+  Users:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/user
+      Runtime: go1.x
+      Tracing: Active
+      Events:
+        GetUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /user/{id}
+            Method: get
   Cities:
     Type: AWS::Serverless::Function
     Properties:
@@ -50,13 +110,21 @@ Resources:
         GetRequests:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /cities
             Method: get
         GetRequest:
           Type: Api
           Properties:
+            RestApiId: !Ref Open311APIGateway
             Path: /city/{id}
             Method: get
+        PostRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /city/onboard
+            Method: post
 
 Outputs:
   URL:
@@ -65,8 +133,8 @@ Outputs:
       Fn::Join:
         - ''
         - - https://
-          - Ref: ServerlessRestApi
+          - Ref: Open311APIGateway
           - ".execute-api."
           - Ref: AWS::Region
           - ".amazonaws.com/"
-          - Ref: ServerlessRestApiProdStage
+          - Ref: Stage

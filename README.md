@@ -53,11 +53,10 @@ Ensure your [AWS credentials](https://docs.aws.amazon.com/sdk-for-go/v1/develope
 ```bash
 AWS_ACCOUNT_ID=1234567890
 AWS_BUCKET_NAME=your-bucket-name-for-cloudformation-package-data
-AWS_STACK_NAME=your-cloudformation-stack-name
 AWS_REGION=us-west-1
 AWS_STACK_NAME=your-cloudformation-stack-name
-AWS_STAGE=stage-to-deploy-to(dev,qa,prod)
-AWS_USER_POOL=arn-of-cognito-userpool
+AWS_STAGE=Prod
+AWS_USER_POOL=your-cognito-pool-ARN
 AWS_IMAGE_BUCKET_NAME=name-of-bucket-to-store-mobile-image-uploads
 ```
 

@@ -15,11 +15,11 @@ import (
 
 // Names of Open311 tables in dynamoDB
 const (
-	ServicesTable	 	= "Services"
-	RequestsTable 	= "Requests"
-	CitiesTable  		= "Cities"
-	UsersTable    	= "Users"
-	FeedbackTable		= "Feedback"
+	ServicesTable   = "Services"
+	RequestsTable   = "Requests"
+	CitiesTable     = "Cities"
+	UsersTable      = "Users"
+	FeedbackTable   = "Feedback"
 	OnboardingTable = "OnboardingRequests"
 )
 
@@ -28,8 +28,10 @@ const AwsRegion = endpoints.UsEast1RegionID // "us-east-1" -  US East (N. Virgin
 
 // constants to define Open311 Request status stringa
 const (
-	RequestOpen   = "open"   // request has been reported
-	RequestClosed = "closed" // request has been resolved
+	RequestOpen       = "open"       // request has been reported
+	RequestAccepted   = "assigned"   // request has been assigned to individual's queue
+	RequestInProgress = "inProgress" // request is actively being worked
+	RequestClosed     = "closed"     // request has been resolved
 )
 
 // Service is an Open311 struct representing a service offered by a city
@@ -86,8 +88,13 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURL          string           `json:"media_url"`          // A URL to media associated with the request, eg an image.
+	Media             []Media          `json:"media"`              // An array of URLs with timestamps to media associated with the request, eg an image.
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
+}
+
+type Media struct {
+	MediaURL  string
+	timestamp string
 }
 
 type RequestResponse struct {
@@ -107,8 +114,8 @@ type User struct {
 }
 
 type Feedback struct {
-	ID 					string `json:"id"`
-	AccountID		string `json:"account_id"`
+	ID          string `json:"id"`
+	AccountID   string `json:"account_id"`
 	Description string `json:"description"`
 }
 
@@ -122,13 +129,13 @@ type City struct {
 }
 
 type OnboardingRequest struct {
-	ID 				string `json:"id"`
-	City 			string `json:"city"`
-	State 		string `json:"state"`
+	ID        string `json:"id"`
+	City      string `json:"city"`
+	State     string `json:"state"`
 	FirstName string `json:"first_name"`
-	LastName 	string `json:"last_name"`
-	Email 		string `json:"email"`
-	Feedback 	string `json:"feedback"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	Feedback  string `json:"feedback"`
 }
 
 type OnboardingResponse struct {
@@ -345,9 +352,10 @@ func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	//Initialize new request as "open"
 	request.Status = RequestOpen
 
-	// Initialize service name
+	// Initialize service name and group responsible to resolve
 	service, _ := GetService(request.ServiceCode)
 	request.ServiceName = service.ServiceName
+	request.AgencyResponsible = service.Group
 
 	av, err := dynamodbattribute.MarshalMap(request)
 	if err != nil {
@@ -670,4 +678,3 @@ func AddFeedback(feedback Feedback) (FeedbackResponse, error) {
 
 	return response, err
 }
-

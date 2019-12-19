@@ -25,6 +25,10 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 			id := req.PathParameters["id"]
 			return getUser(id)
 		}
+	case "POST":
+		if req.Resource == "/feedback" {
+			return submitFeedback(req)
+		}
 	}
 	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET'"))
 }
@@ -48,6 +52,33 @@ func getUser(accountID string) (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       string(body),
+	}, nil
+}
+
+func submitFeedback(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	var feedback repository.Feedback
+	err := json.Unmarshal([]byte(req.Body), &feedback)
+	if err != nil {
+		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling feedback JSON. Check syntax"))
+	}
+
+	// Load feedback into DynamoDB table
+	response, err := repository.AddFeedback(feedback)
+	if err != nil {
+		return serverError(http.StatusInternalServerError, err)
+	}
+
+	body, err := json.Marshal(response)
+	if err != nil {
+		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for response"))
+	}
+
+	infoLogger.Println("Feedback submitted")
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusCreated,
 		Headers:    map[string]string{"content-type": "application/json"},
 		Body:       string(body),
 	}, nil

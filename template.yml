@@ -100,6 +100,12 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /user/{id}
             Method: get
+        Feedback:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Open311APIGateway
+            Path: /feedback
+            Method: post
   Cities:
     Type: AWS::Serverless::Function
     Properties:
@@ -107,19 +113,19 @@ Resources:
       Runtime: go1.x
       Tracing: Active
       Events:
-        GetRequests:
+        GetCities:
           Type: Api
           Properties:
             RestApiId: !Ref Open311APIGateway
             Path: /cities
             Method: get
-        GetRequest:
+        GetCity:
           Type: Api
           Properties:
             RestApiId: !Ref Open311APIGateway
             Path: /city/{id}
             Method: get
-        PostRequest:
+        OnboardRequest:
           Type: Api
           Properties:
             RestApiId: !Ref Open311APIGateway

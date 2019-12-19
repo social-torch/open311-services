@@ -19,6 +19,7 @@ const (
 	RequestsTable 	= "Requests"
 	CitiesTable  		= "Cities"
 	UsersTable    	= "Users"
+	FeedbackTable		= "Feedback"
 	OnboardingTable = "OnboardingRequests"
 )
 
@@ -105,13 +106,21 @@ type User struct {
 	WatchedRequests   []string `json:"watched_request_ids"`   // Slice of request user is watching
 }
 
-// Assumes each jurisdiction has its own AWS endpoint
+type Feedback struct {
+	ID 					string `json:"id"`
+	AccountID		string `json:"account_id"`
+	Description string `json:"description"`
+}
+
+type FeedbackResponse struct {
+	ID string `json:"id"`
+}
+
 type City struct {
 	CityName string `json:"city_name"`
 	Endpoint string `json:"endpoint"`
 }
 
-// Assumes each jurisdiction has its own AWS endpoint
 type OnboardingRequest struct {
 	ID 				string `json:"id"`
 	City 			string `json:"city"`
@@ -597,11 +606,13 @@ func AddOnboardingRequest(request OnboardingRequest, accountID string) (Onboardi
 	}
 
 	// Get unique identifier by which this new request will be submitted.
-	id, err := genRequestID()
+	t := time.Now().UTC()
+	entropy := rand.New(rand.NewSource(t.UnixNano()))
+	id, err := ulid.New(ulid.Timestamp(t), entropy)
 	if err != nil {
 		return OnboardingResponse{}, fmt.Errorf("repository: failed to generate unique id for  request. \n  %s", err)
 	}
-	request.ID = id
+	request.ID = id.String()
 
 	av, err := dynamodbattribute.MarshalMap(request)
 	if err != nil {
@@ -619,7 +630,44 @@ func AddOnboardingRequest(request OnboardingRequest, accountID string) (Onboardi
 	}
 
 	var response OnboardingResponse
-	response.ID = id
+	response.ID = id.String()
 
 	return response, err
 }
+
+func AddFeedback(feedback Feedback) (FeedbackResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return FeedbackResponse{}, err
+	}
+
+	// Get unique identifier by which this new request will be submitted.
+	t := time.Now().UTC()
+	entropy := rand.New(rand.NewSource(t.UnixNano()))
+	id, err := ulid.New(ulid.Timestamp(t), entropy)
+	if err != nil {
+		return FeedbackResponse{}, fmt.Errorf("repository: failed to generate unique id for feedback. \n  %s", err)
+	}
+	feedback.ID = id.String()
+
+	av, err := dynamodbattribute.MarshalMap(feedback)
+	if err != nil {
+		return FeedbackResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", feedback, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(FeedbackTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return FeedbackResponse{}, fmt.Errorf("repository: failed to put new onboarding entry in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response FeedbackResponse
+	response.ID = id.String()
+
+	return response, err
+}
+

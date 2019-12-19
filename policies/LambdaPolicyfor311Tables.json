@@ -21,6 +21,8 @@
                 "dynamodb:UpdateItem"
             ],
             "Resource": "arn:aws:dynamodb:*:*:table/Requests"
+            "Resource": "arn:aws:dynamodb:*:*:table/Feedback"
+            "Resource": "arn:aws:dynamodb:*:*:table/OnboardingRequests"
         }
     ]
 }

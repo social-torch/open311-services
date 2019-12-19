@@ -100,8 +100,16 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
 		return clientError(http.StatusBadRequest, errors.New("no location included in request"))
 	}
-	// Create Open311 Request and load into DynamoDB Requests table
-	response, err := repository.SubmitRequest(Open311request, userID)
+
+	// If this is a new request, initialize a new request.  If this is an existing request, update it
+	if Open311request.ServiceRequestID == "" {
+		// Create new Open311 Request and load into DynamoDB Requests table
+		response, err := repository.SubmitRequest(Open311request, userID)
+	} else {
+		// Update existing Open311 Request in DynamoDB Requests table
+		response, err := repository.UpdateRequest(Open311request, userID)
+	}
+
 	if err != nil {
 		return serverError(http.StatusInternalServerError, err)
 	}

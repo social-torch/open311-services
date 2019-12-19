@@ -26,10 +26,10 @@ const (
 // AwsRegion is the AWS Standard region in which the dynamo tables are created
 const AwsRegion = endpoints.UsEast1RegionID // "us-east-1" -  US East (N. Virginia).
 
-// constants to define Open311 Request status stringa
+// constants to define Open311 Request status strings
 const (
 	RequestOpen       = "open"       // request has been reported
-	RequestAccepted   = "assigned"   // request has been assigned to individual's queue
+	RequestAccepted   = "accepted"   // city worker has accepted responsibility to fix issue
 	RequestInProgress = "inProgress" // request is actively being worked
 	RequestClosed     = "closed"     // request has been resolved
 )
@@ -77,7 +77,7 @@ type Request struct {
 	StatusNotes       string           `json:"status_notes"`       // Explanation of why status was changed to current state or more details on current status than conveyed with status alone.
 	ServiceName       string           `json:"service_name"`       // The human readable name of the service request type
 	ServiceCode       string           `json:"service_code"`       // The unique identifier for the service request type
-	Description       string           `json:"description"`        // A full description of the request or report submitted.
+	Descriptions      []Description    `json:"descriptions"`       // A full description of the request or report submitted. Array type to provide audit log of updates
 	AgencyResponsible string           `json:"agency_responsible"` // The agency responsible for fulfilling or otherwise addressing the service request.
 	ServiceNotice     string           `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported.
 	RequestedDateTime string           `json:"requested_datetime"` // The date and time when the service request was made.
@@ -88,13 +88,17 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	Media             []Media          `json:"media"`              // An array of URLs with timestamps to media associated with the request, eg an image.
+	MediaURLs         []Media          `json:"media_urls"`         // An array of URLs with timestamps to media associated with the request, eg an image.
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
 
+type Description struct {
+	Description string `json:"description"`
+	Timestamp   string `json:"timestamp"`
+}
 type Media struct {
-	MediaURL  string
-	timestamp string
+	MediaURL  string `json:"media_url"`
+	Timestamp string `json:"timestamp"`
 }
 
 type RequestResponse struct {
@@ -109,6 +113,7 @@ type UserResponse struct {
 
 type User struct {
 	AccountID         string   `json:"account_id"`            // Unique ID of Open311 User
+	Groups            []string `json:"group_ids"`             // Slice of agencies or groups to which a user belongs
 	SubmittedRequests []string `json:"submitted_request_ids"` // Slice of requests user has made
 	WatchedRequests   []string `json:"watched_request_ids"`   // Slice of request user is watching
 }
@@ -332,6 +337,8 @@ func GetRequest(id string) (Request, error) {
 	return request, err
 }
 
+// SubmitRequest initializes a new Open311 request. This function generates a requestID, assigns the request creation time,
+// initializes the request to 'open' sets the service name and group responsible to resolve and stores in DynamoDB requests table.
 func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	svc, err := createDynamoClient()
 	if err != nil {
@@ -434,6 +441,39 @@ func trackUserRequest(requestID string, userID string) (*dynamodb.UpdateItemOutp
 
 	return result, err
 
+}
+
+// UpdateRequest takes an existing request and updates the DynamoDB with the new values after setting the 'UpdatedDateTime'
+func UpdateRequest(request Request, accountID string) (RequestResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return RequestResponse{}, err
+	}
+
+	// Set last updated time
+	t := time.Now()
+	request.UpdatedDateTime = t.Format(time.RFC3339)
+
+	av, err := dynamodbattribute.MarshalMap(request)
+	if err != nil {
+		return RequestResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", request, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(RequestsTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return RequestResponse{}, fmt.Errorf("repository: failed to put new request in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response RequestResponse
+	response.AccountID = accountID
+	response.ServiceRequestID = request.ServiceRequestID
+
+	return response, err
 }
 
 // GetUser takes a user's AccountID, looks up that user in DynamoDB and returns the corresponding

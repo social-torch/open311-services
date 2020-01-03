@@ -77,28 +77,30 @@ type Request struct {
 	StatusNotes       string           `json:"status_notes"`       // Explanation of why status was changed to current state or more details on current status than conveyed with status alone.
 	ServiceName       string           `json:"service_name"`       // The human readable name of the service request type
 	ServiceCode       string           `json:"service_code"`       // The unique identifier for the service request type
-	Descriptions      []Description    `json:"descriptions"`       // A full description of the request or report submitted. Array type to provide audit log of updates
+	Description       string           `json:"description"`        // A full description of the request or report submitted.
 	AgencyResponsible string           `json:"agency_responsible"` // The agency responsible for fulfilling or otherwise addressing the service request.
 	ServiceNotice     string           `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported.
-	RequestedDateTime string           `json:"requested_datetime"` // The date and time when the service request was made.
-	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
-	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
+	RequestedDateTime string           `json:"requested_datetime"` // The date and time (RFC3339) when the service request was made.
+	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time (RFC3339) when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
+	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time (RFC3339) when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
 	Address           string           `json:"address"`            // Human readable address or description of location.
 	AddressID         string           `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURLs         []Media          `json:"media_urls"`         // An array of URLs with timestamps to media associated with the request, eg an image.
+	MediaURLs         []Media          `json:"media_urls"`         // Slice of Media items - URLs (and corresponding timestamps) to media associated with the request
+	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
 
-type Description struct {
-	Description string `json:"description"`
-	Timestamp   string `json:"timestamp"`
-}
 type Media struct {
-	MediaURL  string `json:"media_url"`
-	Timestamp string `json:"timestamp"`
+	MediaURL  string `json:"media_url"` // A URL to media associated with the request, eg an image.
+	Timestamp string `json:"timestamp"` // RFC3339 formatted timestamp
+}
+type AuditEntry struct {
+	ChangeNote string `json:"change_note"` // Text describing the change that was made to the Request
+	AccountID  string `json:"account_id"`  // Unique ID for the user account of the person updating the request
+	Timestamp  string `json:"timestamp"`   // RFC3339 formatted timestamp
 }
 
 type RequestResponse struct {
@@ -214,7 +216,7 @@ func allServices() ([]Service, error) {
 	services := []Service{}
 
 	// TODO - investigate UnmarshalListOfMaps here
-	// For each service, unmarshal and add to array of services
+	// For each service, unmarshal and add to slice of services
 	for _, i := range result.Items {
 		service := Service{}
 		err = dynamodbattribute.UnmarshalMap(i, &service)
@@ -263,7 +265,7 @@ func GetService(code string) (Service, error) {
 	return service, err
 }
 
-// GetRequests returns array of all Open311 Requests in DynamoBD Requests Table
+// GetRequests returns slice of all Open311 Requests in DynamoBD Requests Table
 func GetRequests() ([]Request, error) {
 	return allRequests()
 }
@@ -288,7 +290,7 @@ func allRequests() ([]Request, error) {
 
 	requests := []Request{}
 
-	// for each request, unmarshal and add to array of all requests
+	// for each request, unmarshal and add to slice of all requests
 	for _, i := range result.Items {
 		request := Request{}
 		err = dynamodbattribute.UnmarshalMap(i, &request)
@@ -600,7 +602,7 @@ func allCities() ([]City, error) {
 
 	cities := []City{}
 
-	// For each city, unmarshal and add to array of cities
+	// For each city, unmarshal and add to slice of cities
 	for _, i := range result.Items {
 		city := City{}
 		err = dynamodbattribute.UnmarshalMap(i, &city)

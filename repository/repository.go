@@ -15,21 +15,23 @@ import (
 
 // Names of Open311 tables in dynamoDB
 const (
-	ServicesTable	 	= "Services"
-	RequestsTable 	= "Requests"
-	CitiesTable  		= "Cities"
-	UsersTable    	= "Users"
-	FeedbackTable		= "Feedback"
+	ServicesTable   = "Services"
+	RequestsTable   = "Requests"
+	CitiesTable     = "Cities"
+	UsersTable      = "Users"
+	FeedbackTable   = "Feedback"
 	OnboardingTable = "OnboardingRequests"
 )
 
 // AwsRegion is the AWS Standard region in which the dynamo tables are created
 const AwsRegion = endpoints.UsEast1RegionID // "us-east-1" -  US East (N. Virginia).
 
-// constants to define Open311 Request status stringa
+// constants to define Open311 Request status strings
 const (
-	RequestOpen   = "open"   // request has been reported
-	RequestClosed = "closed" // request has been resolved
+	RequestOpen       = "open"       // request has been reported
+	RequestAccepted   = "accepted"   // city worker has accepted responsibility to fix issue
+	RequestInProgress = "inProgress" // request is actively being worked
+	RequestClosed     = "closed"     // request has been resolved
 )
 
 // Service is an Open311 struct representing a service offered by a city
@@ -78,16 +80,27 @@ type Request struct {
 	Description       string           `json:"description"`        // A full description of the request or report submitted.
 	AgencyResponsible string           `json:"agency_responsible"` // The agency responsible for fulfilling or otherwise addressing the service request.
 	ServiceNotice     string           `json:"service_notice"`     // Information about the action expected to fulfill the request or otherwise address the information reported.
-	RequestedDateTime string           `json:"requested_datetime"` // The date and time when the service request was made.
-	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
-	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
+	RequestedDateTime string           `json:"requested_datetime"` // The date and time (RFC3339) when the service request was made.
+	UpdatedDateTime   string           `json:"update_datetime"`    // The date and time (RFC3339) when the service request was last modified. For requests with status=closed, this will be the date the request was closed.
+	ExpectedDateTime  string           `json:"expected_datetime"`  // The date and time (RFC3339) when the service request can be expected to be fulfilled. This may be based on a service-specific service level agreement.
 	Address           string           `json:"address"`            // Human readable address or description of location.
 	AddressID         string           `json:"address_id"`         // The internal address ID used by a jurisdictions master address repository or other addressing system.
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURL          string           `json:"media_url"`          // A URL to media associated with the request, eg an image.
+	MediaURLs         []Media          `json:"media_urls"`         // Slice of Media items - URLs (and corresponding timestamps) to media associated with the request
+	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
+}
+
+type Media struct {
+	MediaURL  string `json:"media_url"` // A URL to media associated with the request, eg an image.
+	Timestamp string `json:"timestamp"` // RFC3339 formatted timestamp
+}
+type AuditEntry struct {
+	ChangeNote string `json:"change_note"` // Text describing the change that was made to the Request
+	AccountID  string `json:"account_id"`  // Unique ID for the user account of the person updating the request
+	Timestamp  string `json:"timestamp"`   // RFC3339 formatted timestamp
 }
 
 type RequestResponse struct {
@@ -102,13 +115,14 @@ type UserResponse struct {
 
 type User struct {
 	AccountID         string   `json:"account_id"`            // Unique ID of Open311 User
+	Groups            []string `json:"group_ids"`             // Slice of agencies or groups to which a user belongs
 	SubmittedRequests []string `json:"submitted_request_ids"` // Slice of requests user has made
 	WatchedRequests   []string `json:"watched_request_ids"`   // Slice of request user is watching
 }
 
 type Feedback struct {
-	ID 					string `json:"id"`
-	AccountID		string `json:"account_id"`
+	ID          string `json:"id"`
+	AccountID   string `json:"account_id"`
 	Description string `json:"description"`
 }
 
@@ -122,13 +136,13 @@ type City struct {
 }
 
 type OnboardingRequest struct {
-	ID 				string `json:"id"`
-	City 			string `json:"city"`
-	State 		string `json:"state"`
+	ID        string `json:"id"`
+	City      string `json:"city"`
+	State     string `json:"state"`
 	FirstName string `json:"first_name"`
-	LastName 	string `json:"last_name"`
-	Email 		string `json:"email"`
-	Feedback 	string `json:"feedback"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	Feedback  string `json:"feedback"`
 }
 
 type OnboardingResponse struct {
@@ -202,7 +216,7 @@ func allServices() ([]Service, error) {
 	services := []Service{}
 
 	// TODO - investigate UnmarshalListOfMaps here
-	// For each service, unmarshal and add to array of services
+	// For each service, unmarshal and add to slice of services
 	for _, i := range result.Items {
 		service := Service{}
 		err = dynamodbattribute.UnmarshalMap(i, &service)
@@ -251,7 +265,7 @@ func GetService(code string) (Service, error) {
 	return service, err
 }
 
-// GetRequests returns array of all Open311 Requests in DynamoBD Requests Table
+// GetRequests returns slice of all Open311 Requests in DynamoBD Requests Table
 func GetRequests() ([]Request, error) {
 	return allRequests()
 }
@@ -276,7 +290,7 @@ func allRequests() ([]Request, error) {
 
 	requests := []Request{}
 
-	// for each request, unmarshal and add to array of all requests
+	// for each request, unmarshal and add to slice of all requests
 	for _, i := range result.Items {
 		request := Request{}
 		err = dynamodbattribute.UnmarshalMap(i, &request)
@@ -325,6 +339,8 @@ func GetRequest(id string) (Request, error) {
 	return request, err
 }
 
+// SubmitRequest initializes a new Open311 request. This function generates a requestID, assigns the request creation time,
+// initializes the request to 'open' sets the service name and group responsible to resolve and stores in DynamoDB requests table.
 func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	svc, err := createDynamoClient()
 	if err != nil {
@@ -345,9 +361,10 @@ func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	//Initialize new request as "open"
 	request.Status = RequestOpen
 
-	// Initialize service name
+	// Initialize service name and group responsible to resolve
 	service, _ := GetService(request.ServiceCode)
 	request.ServiceName = service.ServiceName
+	request.AgencyResponsible = service.Group
 
 	av, err := dynamodbattribute.MarshalMap(request)
 	if err != nil {
@@ -426,6 +443,39 @@ func trackUserRequest(requestID string, userID string) (*dynamodb.UpdateItemOutp
 
 	return result, err
 
+}
+
+// UpdateRequest takes an existing request and updates the DynamoDB with the new values after setting the 'UpdatedDateTime'
+func UpdateRequest(request Request, accountID string) (RequestResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return RequestResponse{}, err
+	}
+
+	// Set last updated time
+	t := time.Now()
+	request.UpdatedDateTime = t.Format(time.RFC3339)
+
+	av, err := dynamodbattribute.MarshalMap(request)
+	if err != nil {
+		return RequestResponse{}, fmt.Errorf("repository: Failed to marshal request:\n %+v. \n  %s", request, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(RequestsTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return RequestResponse{}, fmt.Errorf("repository: failed to put new request in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response RequestResponse
+	response.AccountID = accountID
+	response.ServiceRequestID = request.ServiceRequestID
+
+	return response, err
 }
 
 // GetUser takes a user's AccountID, looks up that user in DynamoDB and returns the corresponding
@@ -552,7 +602,7 @@ func allCities() ([]City, error) {
 
 	cities := []City{}
 
-	// For each city, unmarshal and add to array of cities
+	// For each city, unmarshal and add to slice of cities
 	for _, i := range result.Items {
 		city := City{}
 		err = dynamodbattribute.UnmarshalMap(i, &city)
@@ -670,4 +720,3 @@ func AddFeedback(feedback Feedback) (FeedbackResponse, error) {
 
 	return response, err
 }
-

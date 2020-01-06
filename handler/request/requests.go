@@ -100,8 +100,19 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	if Open311request.Address == "" && (Open311request.Latitude == 0 && Open311request.Longitude == 0) {
 		return clientError(http.StatusBadRequest, errors.New("no location included in request"))
 	}
-	// Create Open311 Request and load into DynamoDB Requests table
-	response, err := repository.SubmitRequest(Open311request, userID)
+
+	var response repository.RequestResponse
+	// If this is a new request, initialize a new request.  If this is an existing request, update it
+	if Open311request.ServiceRequestID == "" {
+		// Create new Open311 Request and load into DynamoDB Requests table
+		response, err = repository.SubmitRequest(Open311request, userID)
+		infoLogger.Println("New request submitted: " + response.ServiceRequestID)
+	} else {
+		// Update existing Open311 Request in DynamoDB Requests table
+		response, err = repository.UpdateRequest(Open311request, userID)
+		infoLogger.Println("Request updated: " + response.ServiceRequestID)
+	}
+
 	if err != nil {
 		return serverError(http.StatusInternalServerError, err)
 	}
@@ -110,8 +121,6 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	if err != nil {
 		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for request response"))
 	}
-
-	infoLogger.Println("New Request submitted: " + response.ServiceRequestID)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,

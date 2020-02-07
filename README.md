@@ -111,6 +111,14 @@ $ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/requests
 TODO:  Show all calls
 ```
 
+## Logging access to the API Gateway:
+
+For debugging purposes, follow this simple 22 step process to see a log of your API calls: [https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-cloudwatch-logs/](https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-cloudwatch-logs/)
+
+Can also use AWS X-Ray to see invocations through the API - Got to API Gateway, under API, select "Stages", the Log/Tracing tab, then enable Xray checkbox.
+
+In X-ray, you can go to "Traces" and select your API you want to inspect in the text box at he top. 
+
 ## Security Note
 
 Until we automate it in the YAML, you must manually add a security policy for the CitiesRole, RequestRole, UsersRole and ServicesRole to access DynamoDB. You must also attach a policy for the ImagesRole to access the appropriate S3 images bucket.

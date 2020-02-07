@@ -21,6 +21,8 @@ Resources:
         Authorizers:
           AuthUser:
             UserPoolArn: !Ref CognitoUserPool
+            Identity:
+              Header: Authorization
   Services:
     Type: AWS::Serverless::Function
     Properties:

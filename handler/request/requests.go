@@ -72,7 +72,7 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 	}
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers": "Content-Type"},
 		Body:       string(body),
 	}, nil
 }

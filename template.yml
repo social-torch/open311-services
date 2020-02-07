@@ -10,12 +10,19 @@ Parameters:
   ImageBucket:
     Type: String
 
+Globals:
+  Api:
+    # Allows an application running locally on port 8080 to call this API
+    Cors:
+      AllowMethods: "OPTIONS,POST,GET"
+      AllowHeaders: "Content-Type"
+      AllowOrigin: "*"
+
 Resources:
   Open311APIGateway:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
-      Cors: "'*'"
       Auth:
         DefaultAuthorizer: AuthUser
         Authorizers:

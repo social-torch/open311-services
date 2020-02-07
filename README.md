@@ -111,6 +111,16 @@ $ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/requests
 TODO:  Show all calls
 ```
 
+## API Gateway OPTIONS Resource
+
+It seems to also be required that the default OPTIONS HTTP method that is generated from the SAM Template needs to be unauthorized.  Info here: [https://github.com/awslabs/aws-sam-cli/issues/1381](https://github.com/awslabs/aws-sam-cli/issues/1381)
+
+1. Go to the API Gatway console
+2. Find "Resources", select the OPTIONS method on the resource/URL you'd like to alter
+3. In the Method Request block, change Authorization to NONE.
+
+Not sure if the preflight check for CORS needs to be unauthorized. AWS Amplify might not correctly form the request header for OPTIONS, because I see it place the authorization header as a VALUE of the Access-Control-Request-Headers header, which makes no sense.
+
 ## Logging access to the API Gateway:
 
 For debugging purposes, follow this simple 22 step process to see a log of your API calls: [https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-cloudwatch-logs/](https://aws.amazon.com/premiumsupport/knowledge-center/api-gateway-cloudwatch-logs/)

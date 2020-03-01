@@ -60,7 +60,7 @@ func getPresignedURLForFetch(key string) (events.APIGatewayProxyResponse, error)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }
@@ -88,7 +88,7 @@ func getPresignedURLForStore(key string) (events.APIGatewayProxyResponse, error)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }

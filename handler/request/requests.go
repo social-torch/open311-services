@@ -55,7 +55,7 @@ func getRequest(id string) (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }
@@ -72,7 +72,7 @@ func getRequests() (events.APIGatewayProxyResponse, error) {
 	}
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }
@@ -124,7 +124,7 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }

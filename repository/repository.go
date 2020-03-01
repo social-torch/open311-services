@@ -88,6 +88,7 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
+	MediaURL          string           `json:"media_url"`          // a URL to media associated with required, eg an image
 	MediaURLs         []Media          `json:"media_urls"`         // Slice of Media items - URLs (and corresponding timestamps) to media associated with the request
 	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
@@ -378,7 +379,7 @@ func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 
 	_, err = svc.PutItem(input)
 	if err != nil {
-		return RequestResponse{}, fmt.Errorf("repository: failed to put new request in database: \n input: %+v. \n %s", input, err)
+		return RequestResponse{}, fmt.Errorf("repository: failed to put new request in database: \n err: %+v. \n Input:%s", err, input)
 	}
 
 	var response RequestResponse

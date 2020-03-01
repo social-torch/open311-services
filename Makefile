@@ -34,6 +34,14 @@ package: build
 		--region $(AWS_REGION) \
 		--output-template-file package.yml
 
+create:
+	@aws cloudformation create-stack \
+		--template-body file://package.yml \
+		--region $(AWS_REGION) \
+		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+		--stack-name $(AWS_STACK_NAME) \
+		--parameters "ParameterKey=Stage,ParameterValue=$(AWS_STAGE)" "ParameterKey=CognitoUserPool,ParameterValue=$(AWS_USER_POOL)" "ParameterKey=ImageBucket,ParameterValue=$(AWS_IMAGE_BUCKET_NAME)"
+
 deploy:
 	@aws cloudformation deploy \
 		--template-file package.yml \

@@ -111,6 +111,10 @@ $ > curl https://random-id.execute-api.us-west-1.amazonaws.com/Stage/requests
 TODO:  Show all calls
 ```
 
+## Cognito App Client
+
+When creating the AppClient ID, do NOT create a secret key.
+
 ## API Gateway OPTIONS Resource
 
 It seems to also be required that the default OPTIONS HTTP method that is generated from the SAM Template needs to be unauthorized.  Info here: [https://github.com/awslabs/aws-sam-cli/issues/1381](https://github.com/awslabs/aws-sam-cli/issues/1381)
@@ -128,6 +132,10 @@ For debugging purposes, follow this simple 22 step process to see a log of your 
 Can also use AWS X-Ray to see invocations through the API - Got to API Gateway, under API, select "Stages", the Log/Tracing tab, then enable Xray checkbox.
 
 In X-ray, you can go to "Traces" and select your API you want to inspect in the text box at he top. 
+
+## API Gateway notes
+
+Remember, any changes to the API will require youto Deploy the app to the proper stage. This was also required for changing Authorizers.
 
 ## Security Note
 

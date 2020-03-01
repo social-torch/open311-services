@@ -10,19 +10,23 @@ Parameters:
   ImageBucket:
     Type: String
 
-Globals:
-  Api:
+#Globals:
+#  Api:
     # Allows an application running locally on port 8080 to call this API
-    Cors:
-      AllowMethods: "OPTIONS,POST,GET"
-      AllowHeaders: "Content-Type"
-      AllowOrigin: "*"
+#    Cors:
+#      AllowMethods: "OPTIONS, GET"
+#      AllowHeaders: "Content-Type"
+#      AllowOrigin: "*"
 
 Resources:
   Open311APIGateway:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
+      Cors:
+        AllowMethods: "'POST, GET'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,x-requested-with,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
       Auth:
         DefaultAuthorizer: AuthUser
         Authorizers:
@@ -140,7 +144,36 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /city/onboard
             Method: post
-
+    ServicesOptionsMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        AuthorizationType: NONE
+        RestApiId:
+          Ref: !Ref Open311APIGateway
+        ResourceId:
+          Ref: !Ref Services
+        HttpMethod: OPTIONS
+        Integration:
+          IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+          PassthroughBehavior: WHEN_NO_MATCH
+          RequestTemplates:
+            application/json: '{"statusCode": 200}'
+          Type: MOCK
+        MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: false
+              method.response.header.Access-Control-Allow-Methods: false
+              method.response.header.Access-Control-Allow-Origin: false
 Outputs:
   URL:
     Description: URL for HTTPS Endpoint

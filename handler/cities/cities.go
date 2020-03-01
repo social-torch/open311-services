@@ -17,7 +17,7 @@ var infoLogger = log.New(os.Stdout, "INFO\t", 0)
 var warningLogger = log.New(os.Stderr, "WARNING\t", log.Lshortfile)
 var errorLogger = log.New(os.Stderr, "ERROR\t", log.Lshortfile)
 
-// Route requests
+// Route requests appropriately
 func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	switch req.HTTPMethod {
 	case "GET":
@@ -58,7 +58,7 @@ func getCity(id string) (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }
@@ -76,7 +76,7 @@ func getCities() (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }
@@ -113,7 +113,7 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,
-		Headers:    map[string]string{"content-type": "application/json"},
+		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil
 }

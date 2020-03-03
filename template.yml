@@ -10,14 +10,6 @@ Parameters:
   ImageBucket:
     Type: String
 
-#Globals:
-#  Api:
-    # Allows an application running locally on port 8080 to call this API
-#    Cors:
-#      AllowMethods: "OPTIONS, GET"
-#      AllowHeaders: "Content-Type"
-#      AllowOrigin: "*"
-
 Resources:
   Open311APIGateway:
     Type: AWS::Serverless::Api
@@ -34,6 +26,8 @@ Resources:
             UserPoolArn: !Ref CognitoUserPool
             Identity:
               Header: Authorization
+# This should make the OPTIONS methods all be non-authorized as CORS needs that
+        AddDefaultAuthorizerToCorsPreflight: False
   Services:
     Type: AWS::Serverless::Function
     Properties:

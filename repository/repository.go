@@ -88,7 +88,7 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURL          Media            `json:"media_url "`         // Media URL (and corresponding timestamps) to media associated with the request
+	MediaURL          string           `json:"media_url "`         // Media URL (and corresponding timestamps) to media associated with the request
 	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }

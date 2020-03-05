@@ -90,7 +90,7 @@ type Request struct {
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
 	MediaURL          string           `json:"media_url"`          // a URL to media associated with required, eg an image
 	MediaURLs         []Media          `json:"media_urls"`         // Slice of Media items - URLs (and corresponding timestamps) to media associated with the request
-	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
+	AuditLog          []string     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
 
@@ -102,6 +102,7 @@ type AuditEntry struct {
 	ChangeNote string `json:"change_note"` // Text describing the change that was made to the Request
 	AccountID  string `json:"account_id"`  // Unique ID for the user account of the person updating the request
 	Timestamp  string `json:"timestamp"`   // RFC3339 formatted timestamp
+    RequestItem    Request `json:"reqitem"` // Old request item
 }
 
 type RequestResponse struct {

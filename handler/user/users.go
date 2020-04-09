@@ -30,7 +30,7 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 			return submitFeedback(req)
 		}
 	}
-	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET'"))
+	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET' or 'POST'"))
 }
 
 func getUser(accountID string) (events.APIGatewayProxyResponse, error) {

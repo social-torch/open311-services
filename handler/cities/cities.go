@@ -35,7 +35,7 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 			return submitRequest(req)
 		}
 	}
-	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET'"))
+	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET' or 'POST'"))
 
 }
 
@@ -94,7 +94,7 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 	}
 
 	// Make sure minimum amount of information in order to create onboarding request
-	if onboardingRequest.City == "" && onboardingRequest.State =="" {
+	if onboardingRequest.City == "" && onboardingRequest.State == "" {
 		return clientError(http.StatusBadRequest, errors.New("City and State must be specified"))
 	}
 
@@ -117,7 +117,6 @@ func submitRequest(req events.APIGatewayProxyRequest) (events.APIGatewayProxyRes
 		Body:       string(body),
 	}, nil
 }
-
 
 func serverError(statusCode int, err error) (events.APIGatewayProxyResponse, error) {
 	errorLogger.Println(err.Error())

@@ -394,6 +394,34 @@ func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	return response, err
 }
 
+// SubmitUser adds a new user to the Users tables with no submitted or tracked requests.
+func SubmitUser(user User) (UserResponse, error) {
+	svc, err := createDynamoClient()
+	if err != nil {
+		return UserResponse{}, err
+	}
+
+	av, err := dynamodbattribute.MarshalMap(user)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: Failed to marshal user:\n %+v. \n  %s", user, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(UsersTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return UserResponse{}, fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
+	}
+
+	var response UserResponse
+	response.AccountID = user.AccountID
+
+	return response, err
+}
+
 // trackUserRequest updates the Users table to append a request to the list of requsts a user has created
 func trackUserRequest(requestID string, userID string) (*dynamodb.UpdateItemOutput, error) {
 	svc, err := createDynamoClient()

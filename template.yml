@@ -106,6 +106,21 @@ Resources:
             RestApiId: !Ref Open311APIGateway
             Path: /feedback
             Method: post
+  CogUserTrigger:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/handler/cogusertrig
+      Runtime: go1.x
+      Tracing: Active
+    # In order to use the Cognito trigger setup, I think 
+    # we also have to define the cognito user pool in this template
+     # Events:
+     #   ConfirmUser:
+     #     Type: Cognito
+     #     Properties:
+     #       Trigger: PostConfirmation
+     #       UserPool: 
+     #         Ref: CognitoUserPool
   Cities:
     Type: AWS::Serverless::Function
     Properties:

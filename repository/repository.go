@@ -88,7 +88,7 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURL          string           `json:"media_url"`         // Media URL
+	MediaURL          string           `json:"media_url"`          // Media URL
 	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
@@ -394,16 +394,16 @@ func SubmitRequest(request Request, accountID string) (RequestResponse, error) {
 	return response, err
 }
 
-// SubmitUser adds a new user to the Users tables with no submitted or tracked requests.
-func SubmitUser(user User) (UserResponse, error) {
+// submitUser adds a new user to the Users tables
+func submitUser(user User) error {
 	svc, err := createDynamoClient()
 	if err != nil {
-		return UserResponse{}, err
+		return err
 	}
 
 	av, err := dynamodbattribute.MarshalMap(user)
 	if err != nil {
-		return UserResponse{}, fmt.Errorf("repository: Failed to marshal user:\n %+v. \n  %s", user, err)
+		return fmt.Errorf("repository: Failed to marshal user:\n %+v. \n  %s", user, err)
 	}
 
 	input := &dynamodb.PutItemInput{
@@ -413,13 +413,10 @@ func SubmitUser(user User) (UserResponse, error) {
 
 	_, err = svc.PutItem(input)
 	if err != nil {
-		return UserResponse{}, fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
+		return fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
 	}
 
-	var response UserResponse
-	response.AccountID = user.AccountID
-
-	return response, err
+	return err
 }
 
 // trackUserRequest updates the Users table to append a request to the list of requsts a user has created
@@ -507,7 +504,8 @@ func UpdateRequest(request Request, accountID string) (RequestResponse, error) {
 }
 
 // GetUser takes a user's AccountID, looks up that user in DynamoDB and returns the corresponding
-// User struct.  If the requested AccountID is not in the database, an AccountIDNotFoundErr error is set
+// User struct.  
+// If the requested AccountID is not in the database, a new user is added to the Users Table with the specified AccountID.
 func GetUser(accountID string) (User, error) {
 	svc, err := createDynamoClient()
 	if err != nil {
@@ -535,8 +533,20 @@ func GetUser(accountID string) (User, error) {
 		return user, fmt.Errorf("\n repository: Failed to unmarshal user record from database: \n  %+v. \n   %s", result.Item, err)
 	}
 
+	// If the user doesn't exist, add the user to the DynamoDB Users Table.
+	//   Note: This seems like a terrible idea and it probably is. This assumes Cognito is guarding api calls and 
+	//   a user has already been authenticated by cognito for this function to ever be called.  Probably better to 
+	//   use a post confirmation trigger on Cognito sign up to add user to user table, but implementing here for expediency.
 	if user.AccountID == "" {
-		return user, &AccountIDNotFoundErr{"user not found"}
+		// return user, &AccountIDNotFoundErr{"user not found"}
+		user.AccountID = accountID
+		user.Groups = []string{}
+		user.SubmittedRequests = []string{}
+		user.WatchedRequests = []string{}
+		err = submitUser(user)
+		if err != nil {
+			return User{}, fmt.Errorf("\n repository: Unable to create new user in database:\n   %s", err)
+		}
 	}
 
 	return user, err

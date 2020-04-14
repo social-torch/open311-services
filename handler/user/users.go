@@ -29,9 +29,6 @@ func router(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, 
 		if req.Resource == "/feedback" {
 			return submitFeedback(req)
 		}
-		if req.Resource == "/user" {
-			return submitUser(req)
-		}
 	}
 	return clientError(http.StatusMethodNotAllowed, errors.New("method must be 'GET' or 'POST'"))
 }
@@ -55,42 +52,6 @@ func getUser(accountID string) (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusOK,
-		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
-		Body:       string(body),
-	}, nil
-}
-
-func submitUser(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
-	var user repository.User
-	err := json.Unmarshal([]byte(req.Body), &user)
-	if err != nil {
-		return clientError(http.StatusUnprocessableEntity, errors.New("error unmarshalling Request JSON. Check syntax"+err.Error()))
-	}
-
-	// // TODO - verify if these should actually match
-	// userID := req.Headers["from"]
-	// if userID != user.AccountID{
-	// 	return clientError(http.StatusBadRequest, errors.New("AccountID mismatch.  Header information doesn't match body"))
-	// }
-
-	// Make sure req has minimum amount of information in order to create new User
-	// Check that user has AccountID
-	if user.AccountID == "" {
-		return clientError(http.StatusBadRequest, errors.New("no AccountID specified"))
-	}
-
-	var response repository.UserResponse
-	response, err = repository.SubmitUser(user)
-	infoLogger.Println("User added: " + response.AccountID)
-
-	body, err := json.Marshal(response)
-	if err != nil {
-		return serverError(http.StatusInternalServerError, errors.New("unable to marshal JSON for user response"))
-	}
-
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusCreated,
 		Headers:    map[string]string{"content-type": "application/json", "Access-Control-Allow-Origin": "*"},
 		Body:       string(body),
 	}, nil

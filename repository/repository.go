@@ -88,7 +88,7 @@ type Request struct {
 	ZipCode           int32            `json:"zipcode"`            // The postal code for the location of the service request.
 	Latitude          float32          `json:"lat"`                // latitude using the (WGS84) projection.
 	Longitude         float32          `json:"lon"`                // longitude using the (WGS84) projection.
-	MediaURL          string           `json:"media_url"`         // Media URL
+	MediaURL          string           `json:"media_url"`          // Media URL
 	AuditLog          []AuditEntry     `json:"audit_log"`          // Slice of AuditEntry items - Log to keep track of all changes to a Request over time
 	Values            []AttributeValue `json:"values"`             // Enables future expansion
 }
@@ -719,4 +719,39 @@ func AddFeedback(feedback Feedback) (FeedbackResponse, error) {
 	response.ID = id.String()
 
 	return response, err
+}
+
+// AddNewUser creates a new entry in the DynamoDB Users Table with the primary key (account_id)
+// 	set to the string passed in and all other fields set to zero values (Groups, SubmittedRequests and WatchedRequests)
+// 	The expected use case is for Cognito to call this funciton (via the post confirmation trigger) so as only to
+//	add new users verified by cognito
+func AddNewUser(accountID string) error {
+
+	user := User{}
+	user.AccountID = accountID
+	user.Groups = []string{}
+	user.SubmittedRequests = []string{}
+	user.WatchedRequests = []string{}
+
+	svc, err := createDynamoClient()
+	if err != nil {
+		return err
+	}
+
+	av, err := dynamodbattribute.MarshalMap(user)
+	if err != nil {
+		return fmt.Errorf("repository: Failed to marshal user:\n %+v. \n  %s", user, err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(UsersTable),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		return fmt.Errorf("repository: failed to put new user in database: \n input: %+v. \n %s", input, err)
+	}
+
+	return err
 }
